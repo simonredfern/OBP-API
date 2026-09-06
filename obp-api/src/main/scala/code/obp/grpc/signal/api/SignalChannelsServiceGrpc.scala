@@ -59,13 +59,13 @@ object SignalChannelsServiceGrpc {
   trait SignalChannelsService extends _root_.scalapb.grpc.AbstractService {
     override def serviceCompanion = SignalChannelsService
 
-    /** 1:1 with POST /signal/channels/CHANNEL_NAME/messages */
+    /** 1:1 with POST /signal-channels/CHANNEL_NAME/messages */
     def publish(request: PublishRequest): scala.concurrent.Future[PublishResponse]
 
-    /** 1:1 with GET /signal/channels/CHANNEL_NAME/messages (offset/limit, privacy-filtered) */
+    /** 1:1 with GET /signal-channels/CHANNEL_NAME/messages (offset/limit, privacy-filtered) */
     def fetch(request: FetchRequest): scala.concurrent.Future[FetchResponse]
 
-    /** 1:1 with GET /signal/channels (broadcast-visible channels only) */
+    /** 1:1 with GET /signal-channels (broadcast-visible channels only) */
     def listChannels(request: ListChannelsRequest): scala.concurrent.Future[ListChannelsResponse]
 
     /** Server-side stream of new messages on one channel. Live only: no catch-up, no replay. */

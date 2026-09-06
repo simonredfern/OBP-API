@@ -11,7 +11,7 @@ import org.json4s.JsonAST.JValue
 import org.scalatest.Tag
 
 /**
- * Validation / error-path tests for the /signal/channels endpoints.
+ * Validation / error-path tests for the /signal-channels endpoints.
  *
  * Every scenario here fails BEFORE RedisMessaging is touched (auth and role
  * checks run in the middleware; the size and character checks run in the
@@ -30,10 +30,10 @@ class SignalChannelTest extends V600ServerSetup {
     try jedis.ping() finally jedis.close()
   }.isSuccess
 
-  private def publishRequest = (v6_0_0_Request / "signal" / "channels" / "test-channel" / "messages").POST
-  private def deleteRequest = (v6_0_0_Request / "signal" / "channels" / "test-channel").DELETE
+  private def publishRequest = (v6_0_0_Request / "signal-channels" / "test-channel" / "messages").POST
+  private def deleteRequest = (v6_0_0_Request / "signal-channels" / "test-channel").DELETE
 
-  feature(s"Publish Signal Message - POST /obp/v6.0.0/signal/channels/CHANNEL_NAME/messages - $VersionOfApi") {
+  feature(s"Publish Signal Message - POST /obp/v6.0.0/signal-channels/CHANNEL_NAME/messages - $VersionOfApi") {
 
     scenario("Anonymous access should fail with 401", ApiEndpointPublish, VersionOfApi) {
       val response = makePostRequest(publishRequest, """{"payload":{"hello":"world"}}""")
@@ -76,7 +76,7 @@ class SignalChannelTest extends V600ServerSetup {
       // AFTER the size and character checks without reaching Redis — proving
       // legitimate international text is not rejected as dangerous.
       val longName = "a" * 129
-      val request = (v6_0_0_Request / "signal" / "channels" / longName / "messages").POST <@ (user1)
+      val request = (v6_0_0_Request / "signal-channels" / longName / "messages").POST <@ (user1)
       val body = """{"payload":{"note":"Grüße aus Berlin, 東京"}}"""
       val response = makePostRequest(request, body)
       response.code should equal(400)
@@ -84,10 +84,10 @@ class SignalChannelTest extends V600ServerSetup {
     }
   }
 
-  feature(s"Get Signal Messages - GET /obp/v6.0.0/signal/channels/CHANNEL_NAME/messages - $VersionOfApi") {
+  feature(s"Get Signal Messages - GET /obp/v6.0.0/signal-channels/CHANNEL_NAME/messages - $VersionOfApi") {
 
     scenario("a non-numeric after_sequence should fail with 400 OBP-10002", ApiEndpointGetMessages, VersionOfApi) {
-      val request = (v6_0_0_Request / "signal" / "channels" / "test-channel" / "messages").GET <@ (user1) <<? List(("after_sequence", "later"))
+      val request = (v6_0_0_Request / "signal-channels" / "test-channel" / "messages").GET <@ (user1) <<? List(("after_sequence", "later"))
       val response = makeGetRequest(request)
       response.code should equal(400)
       response.body.extract[ErrorMessage].message should startWith(ErrorMessages.InvalidNumber)
@@ -96,7 +96,7 @@ class SignalChannelTest extends V600ServerSetup {
     scenario("after_sequence returns only newer messages and next_after_sequence continues the cursor", ApiEndpointGetMessages, VersionOfApi) {
       if (!redisReachable) cancel("Redis is not reachable from this test JVM")
       val channelName = s"rest-cursor-${java.util.UUID.randomUUID().toString.take(8)}"
-      val publish = (v6_0_0_Request / "signal" / "channels" / channelName / "messages").POST <@ (user1)
+      val publish = (v6_0_0_Request / "signal-channels" / channelName / "messages").POST <@ (user1)
       val first = makePostRequest(publish, """{"payload":{"n":1}}""")
       first.code should equal(201)
       val firstSeq = (first.body \ "sequence").extract[Long]
@@ -104,7 +104,7 @@ class SignalChannelTest extends V600ServerSetup {
       makePostRequest(publish, """{"payload":{"n":2}}""").code should equal(201)
       makePostRequest(publish, """{"payload":{"n":3}}""").code should equal(201)
 
-      val read = (v6_0_0_Request / "signal" / "channels" / channelName / "messages").GET <@ (user1)
+      val read = (v6_0_0_Request / "signal-channels" / channelName / "messages").GET <@ (user1)
       val newer = makeGetRequest(read <<? List(("after_sequence", firstSeq.toString)))
       newer.code should equal(200)
       val messages = newer.body \ "messages"
@@ -123,7 +123,7 @@ class SignalChannelTest extends V600ServerSetup {
     }
   }
 
-  feature(s"Delete Signal Channel - DELETE /obp/v6.0.0/signal/channels/CHANNEL_NAME - $VersionOfApi") {
+  feature(s"Delete Signal Channel - DELETE /obp/v6.0.0/signal-channels/CHANNEL_NAME - $VersionOfApi") {
 
     scenario("Anonymous access should fail with 401", ApiEndpointDelete, VersionOfApi) {
       val response = makeDeleteRequest(deleteRequest)

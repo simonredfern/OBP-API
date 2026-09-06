@@ -2857,18 +2857,18 @@ object Http4s600 {
 
     // ─── Phase 2: Signal bucket (6 endpoints) ────────────────────────────
 
-    // GET /obp/v6.0.0/signal/channels
+    // GET /obp/v6.0.0/signal-channels
     lazy val getSignalChannels: HttpRoutes[IO] = HttpRoutes.of[IO] {
-      case req @ GET -> `prefixPath` / "signal" / "channels" =>
+      case req @ GET -> `prefixPath` / "signal-channels" =>
         EndpointHelpers.withUser(req) { (_, cc) =>
           // Shared with the gRPC SignalChannelsService.ListChannels, see code.signal.SignalChannels
           Future(SignalChannelsJsonV600(code.signal.SignalChannels.listBroadcastChannels()))
         }
     }
 
-    // GET /obp/v6.0.0/signal/channels/CHANNEL_NAME/info
+    // GET /obp/v6.0.0/signal-channels/CHANNEL_NAME/info
     lazy val getSignalChannelInfo: HttpRoutes[IO] = HttpRoutes.of[IO] {
-      case req @ GET -> `prefixPath` / "signal" / "channels" / channelName / "info" =>
+      case req @ GET -> `prefixPath` / "signal-channels" / channelName / "info" =>
         EndpointHelpers.withUser(req) { (_, cc) =>
           for {
             _ <- Helper.booleanToFuture(InvalidSignalChannelName, cc = Some(cc)) {
@@ -2889,9 +2889,9 @@ object Http4s600 {
         }
     }
 
-    // GET /obp/v6.0.0/signal/channels/stats
+    // GET /obp/v6.0.0/signal-channels/stats
     lazy val getSignalStats: HttpRoutes[IO] = HttpRoutes.of[IO] {
-      case req @ GET -> `prefixPath` / "signal" / "channels" / "stats" =>
+      case req @ GET -> `prefixPath` / "signal-channels" / "stats" =>
         EndpointHelpers.withUser(req) { (_, cc) =>
           Future {
             val names = code.api.cache.RedisMessaging.listChannels()
@@ -2908,9 +2908,9 @@ object Http4s600 {
         }
     }
 
-    // POST /obp/v6.0.0/signal/channels/CHANNEL_NAME/messages (201)
+    // POST /obp/v6.0.0/signal-channels/CHANNEL_NAME/messages (201)
     lazy val publishSignalMessage: HttpRoutes[IO] = HttpRoutes.of[IO] {
-      case req @ POST -> `prefixPath` / "signal" / "channels" / channelName / "messages" =>
+      case req @ POST -> `prefixPath` / "signal-channels" / channelName / "messages" =>
         EndpointHelpers.executeFutureCreated(req) {
           implicit val cc: CallContext = req.callContext
           val rawBody = cc.httpBody.getOrElse("")
@@ -2942,9 +2942,9 @@ object Http4s600 {
         }
     }
 
-    // GET /obp/v6.0.0/signal/channels/CHANNEL_NAME/messages
+    // GET /obp/v6.0.0/signal-channels/CHANNEL_NAME/messages
     lazy val getSignalMessages: HttpRoutes[IO] = HttpRoutes.of[IO] {
-      case req @ GET -> `prefixPath` / "signal" / "channels" / channelName / "messages" =>
+      case req @ GET -> `prefixPath` / "signal-channels" / channelName / "messages" =>
         EndpointHelpers.withUser(req) { (user, cc) =>
           for {
             _ <- Helper.booleanToFuture(InvalidSignalChannelName, cc = Some(cc)) {
@@ -2969,9 +2969,9 @@ object Http4s600 {
         }
     }
 
-    // DELETE /obp/v6.0.0/signal/channels/CHANNEL_NAME (200 with body — not 204)
+    // DELETE /obp/v6.0.0/signal-channels/CHANNEL_NAME (200 with body — not 204)
     lazy val deleteSignalChannel: HttpRoutes[IO] = HttpRoutes.of[IO] {
-      case req @ DELETE -> `prefixPath` / "signal" / "channels" / channelName =>
+      case req @ DELETE -> `prefixPath` / "signal-channels" / channelName =>
         EndpointHelpers.executeAndRespond(req) { implicit cc =>
           for {
             _ <- Helper.booleanToFuture(InvalidSignalChannelName, cc = Some(cc)) {
@@ -10424,7 +10424,7 @@ object Http4s600 {
         implementedInApiVersion,
         nameOf(getSignalChannels),
         "GET",
-        "/signal/channels",
+        "/signal-channels",
         "List Signal Channels",
         s"""Signal channels provide short-lived, Redis-backed messaging designed for AI agent discovery and coordination, but usable by any authenticated OBP consumer.
         |Messages are ephemeral and will expire after the configured TTL (default 1 hour).
@@ -10447,7 +10447,7 @@ object Http4s600 {
         implementedInApiVersion,
         nameOf(getSignalChannelInfo),
         "GET",
-        "/signal/channels/CHANNEL_NAME/info",
+        "/signal-channels/CHANNEL_NAME/info",
         "Get Signal Channel Info",
         s"""Signal channels provide short-lived, Redis-backed messaging designed for AI agent discovery and coordination, but usable by any authenticated OBP consumer.
         |Messages are ephemeral and will expire after the configured TTL (default 1 hour).
@@ -10468,7 +10468,7 @@ object Http4s600 {
         implementedInApiVersion,
         nameOf(getSignalStats),
         "GET",
-        "/signal/channels/stats",
+        "/signal-channels/stats",
         "Get Signal Channel Stats",
         s"""Returns statistics for all signal channels, including private-only channels.
         |
@@ -10489,7 +10489,7 @@ object Http4s600 {
         implementedInApiVersion,
         nameOf(publishSignalMessage),
         "POST",
-        "/signal/channels/CHANNEL_NAME/messages",
+        "/signal-channels/CHANNEL_NAME/messages",
         "Publish Signal Message",
         s"""Publish a message to a signal channel.
         |
@@ -10540,7 +10540,7 @@ object Http4s600 {
         implementedInApiVersion,
         nameOf(getSignalMessages),
         "GET",
-        "/signal/channels/CHANNEL_NAME/messages",
+        "/signal-channels/CHANNEL_NAME/messages",
         "Get Signal Messages",
         s"""Fetch messages from a signal channel with offset/limit pagination.
         |
@@ -10577,7 +10577,7 @@ object Http4s600 {
         implementedInApiVersion,
         nameOf(deleteSignalChannel),
         "DELETE",
-        "/signal/channels/CHANNEL_NAME",
+        "/signal-channels/CHANNEL_NAME",
         "Delete Signal Channel",
         s"""Signal channels provide short-lived, Redis-backed messaging designed for AI agent discovery and coordination, but usable by any authenticated OBP consumer.
         |Messages are ephemeral and will expire after the configured TTL (default 1 hour).

@@ -6067,7 +6067,7 @@ object Glossary extends MdcLoggable  {
 				 |Signal channels are readable and writable by any authenticated consumer on the instance. If your agent feeds received payloads to an LLM, treat them as **untrusted data, never as instructions** — the character checks above stop display-layer trickery, but no server-side check can stop a payload from *saying* something misleading. Prompt-injection defence belongs in the consuming agent.
 				 |
 				 |## Endpoints
-				 |See the API Explorer tags **Signal** / **AI-Agent**: list channels, channel info, channel stats, publish message, get messages (offset/limit polling), delete channel — under `/obp/v6.0.0/signal/channels/...`.
+				 |See the API Explorer tags **Signal-Channel** / **AI-Agent**: list channels, channel info, channel stats, publish message, get messages (offset/limit polling), delete channel — under `/obp/v6.0.0/signal-channels/...`.
 				 |
 				 |## gRPC
 				 |The same operations are served over gRPC by `SignalChannelsService` (package `code.obp.grpc.signal.g1`, contract in `signal.proto`) when the gRPC server is enabled (`grpc.server.enabled`): **Publish**, **Fetch** and **ListChannels** are 1:1 with the REST endpoints and share their storage, and **Subscribe** is a server-side stream of new messages on one channel. Subscribe is live only — no catch-up, no replay — and applies the same privacy filter as Fetch. Each publish, REST or gRPC, is pushed to subscribers through Redis pub/sub. Authenticate with the same `Authorization` value the REST endpoints take, sent as gRPC metadata.

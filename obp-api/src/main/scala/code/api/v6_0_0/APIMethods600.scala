@@ -11047,7 +11047,7 @@ trait APIMethods600
 //      implementedInApiVersion,
 //      nameOf(publishSignalMessage),
 //      "POST",
-//      "/signal/channels/CHANNEL_NAME/messages",
+//      "/signal-channels/CHANNEL_NAME/messages",
 //      "Publish Signal Message",
 //      s"""Publish a message to a signal channel.
 //         |
@@ -11076,7 +11076,7 @@ trait APIMethods600
 //      List(apiTagAiAgent, apiTagSignalChannel))
 //
 //    lazy val publishSignalMessage: OBPEndpoint = {
-//      case "signal" :: "channels" :: channelName :: "messages" :: Nil JsonPost json -> _ =>
+//      case "signal-channels" :: channelName :: "messages" :: Nil JsonPost json -> _ =>
 //        cc =>
 //          implicit val ec = EndpointContext(Some(cc))
 //          for {
@@ -11128,7 +11128,7 @@ trait APIMethods600
 //      implementedInApiVersion,
 //      nameOf(getSignalMessages),
 //      "GET",
-//      "/signal/channels/CHANNEL_NAME/messages",
+//      "/signal-channels/CHANNEL_NAME/messages",
 //      "Get Signal Messages",
 //      s"""Fetch messages from a signal channel with offset/limit pagination.
 //         |
@@ -11155,7 +11155,7 @@ trait APIMethods600
 //      List(apiTagAiAgent, apiTagSignalChannel))
 //
 //    lazy val getSignalMessages: OBPEndpoint = {
-//      case "signal" :: "channels" :: channelName :: "messages" :: Nil JsonGet _ =>
+//      case "signal-channels" :: channelName :: "messages" :: Nil JsonGet _ =>
 //        cc =>
 //          implicit val ec = EndpointContext(Some(cc))
 //          for {
@@ -11196,7 +11196,7 @@ trait APIMethods600
 //      implementedInApiVersion,
 //      nameOf(getSignalChannels),
 //      "GET",
-//      "/signal/channels",
+//      "/signal-channels",
 //      "List Signal Channels",
 //      s"""Signal channels provide short-lived, Redis-backed messaging designed for AI agent discovery and coordination, but usable by any authenticated OBP consumer.
 //         |Messages are ephemeral and will expire after the configured TTL (default 1 hour).
@@ -11217,7 +11217,7 @@ trait APIMethods600
 //      List(apiTagAiAgent, apiTagSignalChannel))
 //
 //    lazy val getSignalChannels: OBPEndpoint = {
-//      case "signal" :: "channels" :: Nil JsonGet _ =>
+//      case "signal-channels" :: Nil JsonGet _ =>
 //        cc =>
 //          implicit val ec = EndpointContext(Some(cc))
 //          for {
@@ -11262,7 +11262,7 @@ trait APIMethods600
 //      implementedInApiVersion,
 //      nameOf(getSignalChannelInfo),
 //      "GET",
-//      "/signal/channels/CHANNEL_NAME/info",
+//      "/signal-channels/CHANNEL_NAME/info",
 //      "Get Signal Channel Info",
 //      s"""Signal channels provide short-lived, Redis-backed messaging designed for AI agent discovery and coordination, but usable by any authenticated OBP consumer.
 //         |Messages are ephemeral and will expire after the configured TTL (default 1 hour).
@@ -11282,7 +11282,7 @@ trait APIMethods600
 //      List(apiTagAiAgent, apiTagSignalChannel))
 //
 //    lazy val getSignalChannelInfo: OBPEndpoint = {
-//      case "signal" :: "channels" :: channelName :: "info" :: Nil JsonGet _ =>
+//      case "signal-channels" :: channelName :: "info" :: Nil JsonGet _ =>
 //        cc =>
 //          implicit val ec = EndpointContext(Some(cc))
 //          for {
@@ -11313,7 +11313,7 @@ trait APIMethods600
 //      implementedInApiVersion,
 //      nameOf(deleteSignalChannel),
 //      "DELETE",
-//      "/signal/channels/CHANNEL_NAME",
+//      "/signal-channels/CHANNEL_NAME",
 //      "Delete Signal Channel",
 //      s"""Signal channels provide short-lived, Redis-backed messaging designed for AI agent discovery and coordination, but usable by any authenticated OBP consumer.
 //         |Messages are ephemeral and will expire after the configured TTL (default 1 hour).
@@ -11337,7 +11337,7 @@ trait APIMethods600
 //      implementedInApiVersion,
 //      nameOf(getSignalStats),
 //      "GET",
-//      "/signal/channels/stats",
+//      "/signal-channels/stats",
 //      "Get Signal Channel Stats",
 //      s"""Returns statistics for all signal channels, including private-only channels.
 //         |
@@ -11358,7 +11358,7 @@ trait APIMethods600
 //      Some(List(canGetSignalStats)))
 //
 //    lazy val getSignalStats: OBPEndpoint = {
-//      case "signal" :: "channels" :: "stats" :: Nil JsonGet _ =>
+//      case "signal-channels" :: "stats" :: Nil JsonGet _ =>
 //        cc =>
 //          implicit val ec = EndpointContext(Some(cc))
 //          for {
@@ -11393,7 +11393,7 @@ trait APIMethods600
 //
 //
 //    lazy val deleteSignalChannel: OBPEndpoint = {
-//      case "signal" :: "channels" :: channelName :: Nil JsonDelete _ =>
+//      case "signal-channels" :: channelName :: Nil JsonDelete _ =>
 //        cc =>
 //          implicit val ec = EndpointContext(Some(cc))
 //          for {

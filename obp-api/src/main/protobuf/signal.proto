@@ -25,7 +25,7 @@ message SignalChannelInfo {
   int64 ttl_seconds = 3;
 }
 
-// --- Publish: 1:1 with POST /signal/channels/{name}/messages ---
+// --- Publish: 1:1 with POST /signal-channels/{name}/messages ---
 
 message PublishRequest {
   string channel_name = 1;
@@ -42,7 +42,7 @@ message PublishResponse {
   int64 sequence = 5;
 }
 
-// --- Fetch: 1:1 with GET /signal/channels/{name}/messages ---
+// --- Fetch: 1:1 with GET /signal-channels/{name}/messages ---
 // Privacy filter applied server-side: caller sees broadcasts plus messages
 // to/from themselves. Same logic as REST.
 
@@ -64,7 +64,7 @@ message FetchResponse {
   int64 next_after_sequence = 6;    // pass back as after_sequence to continue (advances past hidden private messages too)
 }
 
-// --- ListChannels: 1:1 with GET /signal/channels ---
+// --- ListChannels: 1:1 with GET /signal-channels ---
 // Returns broadcast-visible channels only, matching REST behaviour.
 
 message ListChannelsRequest {}

@@ -1359,7 +1359,7 @@ database_messages_scheduler_interval=3600
 # chat.email_digest_active_grace_minutes = 10
 
 # Signal channels -----------------------------------------------------------
-# Redis-backed ephemeral channels (/signal/channels endpoints) for lightweight
+# Redis-backed ephemeral channels (/signal-channels endpoints) for lightweight
 # agent-to-agent coordination. Per-channel TTL (refreshed on every publish)
 # and per-channel message cap:
 # messaging.channel.ttl.seconds = 3600
