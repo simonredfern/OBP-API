@@ -1715,6 +1715,37 @@ object JSONFactory700 extends MdcLoggable with code.api.util.CustomJsonFormats {
     updated_at = APIUtil.DateWithDayExampleObject
   )))
 
+  // ─── Dynamic resource doc dry-run compile ─────────────────────────────────
+
+  /** Request: the parts of a Dynamic Resource Doc that shape the compiled code. */
+  case class DynamicResourceDocCompileJsonV700(
+    request_verb: String,
+    request_url: String,
+    method_body: String,
+    example_request_body: Option[JValue],
+    success_response_body: Option[JValue]
+  )
+  case class DynamicCompileErrorJsonV700(line: Int, column: Int, severity: String, message: String)
+  case class DynamicCompileResultJsonV700(
+    compiles: Boolean,
+    errors: List[DynamicCompileErrorJsonV700],
+    dependency_error: Option[String],
+    duration_ms: Long
+  )
+  lazy val dynamicResourceDocCompileJsonV700Example = DynamicResourceDocCompileJsonV700(
+    request_verb = "GET",
+    request_url = "/hello/world",
+    method_body = java.net.URLEncoder.encode("Future.successful((Map(\"hello\" -> \"world\"), HttpCode.`200`(callContext)))", "UTF-8"),
+    example_request_body = None,
+    success_response_body = Some(org.json4s.JsonAST.JObject(List(org.json4s.JsonAST.JField("hello", org.json4s.JsonAST.JString("world")))))
+  )
+  lazy val dynamicCompileResultJsonV700Example = DynamicCompileResultJsonV700(
+    compiles = false,
+    errors = List(DynamicCompileErrorJsonV700(1, 24, "ERROR", "not found: value Full")),
+    dependency_error = None,
+    duration_ms = 850
+  )
+
   // ─── Dynamic code approval config — whether maker/checker gates dynamic artefacts on this instance ──
 
   case class DynamicCodeApprovalConfigJsonV700(

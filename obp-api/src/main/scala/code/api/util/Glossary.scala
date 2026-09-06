@@ -3761,6 +3761,25 @@ object Glossary extends MdcLoggable  {
 |
 |A helper endpoint (`POST /management/dynamic-resource-docs/endpoint-code`) can generate a method-body template from example request / response bodies.
 |
+|**The method body**
+|
+|The body is inlined, unchanged, into a native http4s handler. Do not wrap it in a method or class. In scope:
+|
+|* `callContext: CallContext` - the authenticated User, Consumer, `resourceDocument`, `httpBody` (the raw request body as a String) and `callContext.callContext` (the same as an `Option`).
+|* `request: org.http4s.Request[IO]` - the raw request, for headers or the URI.
+|* `pathParams: Map[String, String]` - one entry per UPPER_CASE segment of the request URL, for example `pathParams("BANK_ID")`.
+|* `RequestRootJsonClass` / `ResponseRootJsonClass` - case classes generated from the example request body and success response body. Parse the request with `JsonAliases.parse(rawBody).extract[RequestRootJsonClass]`.
+|* `errorResponse(message, code = 400)` - returns the standard OBP error JSON with that status.
+|* Imports: `Future` and the OBP execution context, `HttpCode`, `OBPReturnType`, `ErrorMessages.{InvalidJsonFormat, InvalidRequestPayload}`, `MappingException`, `cats.effect.IO`, `net.liftweb.common.{Box, Empty, Failure, Full}` (for matching on Connector results), and an implicit `formats`.
+|
+|The last expression is the response. Return `Future.successful((value, HttpCode.`200`(callContext)))` - any case class, Map or List that serialises to JSON, paired with the call context whose status was set by `HttpCode` - or `errorResponse(...)`. An implicit converts that `Future[(T, Option[CallContext])]` into the http4s response. The Lift-era shapes `Full(successJsonResponse(...))` and `Box[JsonResponse]` are not accepted; a body that returns them fails to compile (`OBP-40045`).
+|
+|The smallest valid body:
+|
+|    Future.successful((Map("hello" -> "world"), HttpCode.`200`(callContext)))
+|
+|To check a body before creating anything, `POST /obp/v7.0.0/management/dynamic-resource-docs/compile` compiles it the same way and returns the compiler's errors with line numbers relative to the body. The API Manager's Create page uses it for its Compile button and for the loop in which Opey rewrites the body until it compiles.
+|
 |See ${getGlossaryItemLink("Dynamic Code Paths")} for how Dynamic Resource Docs relate to the other runtime-defined building blocks, and ${getGlossaryItemLink("Dynamic Change Request")} for how an operator can require a second person to approve each definition before it is compiled and served.
 |
 """.stripMargin)

@@ -6153,6 +6153,84 @@ object Http4s700 {
       http4sPartialFunction = Some(getMyDynamicChangeRequests)
     )
 
+    // Route: POST /obp/v7.0.0/management/dynamic-resource-docs/compile
+    // Dry run for tooling: compile a method body and report the compiler's diagnostics, mapped to the
+    // body's own line numbers. Nothing is stored, evaluated or cached. Compiling is still a full scalac run
+    // that can execute code at top level, so it needs the create role, the kill switch, and a per-user throttle.
+    private val dynamicCompileCallsPerMinute = 20
+    private val dynamicCompileCalls = new java.util.concurrent.ConcurrentHashMap[String, java.util.ArrayDeque[Long]]()
+    private def allowDynamicCompile(userId: String): Boolean = dynamicCompileCalls.synchronized {
+      val now = System.currentTimeMillis()
+      val q = dynamicCompileCalls.computeIfAbsent(userId, _ => new java.util.ArrayDeque[Long]())
+      while (!q.isEmpty && q.peekFirst() < now - 60000L) q.pollFirst()
+      if (q.size() >= dynamicCompileCallsPerMinute) false else { q.addLast(now); true }
+    }
+
+    val compileDynamicResourceDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
+      case req @ POST -> `prefixPath` / "management" / "dynamic-resource-docs" / "compile" =>
+        EndpointHelpers.withUser(req) { (u, cc) =>
+          import code.api.v7_0_0.JSONFactory700.{DynamicCompileErrorJsonV700, DynamicCompileResultJsonV700, DynamicResourceDocCompileJsonV700}
+          for {
+            _ <- code.util.Helper.booleanToFuture(DynamicCodeExecutionDisabled, cc = Some(cc)) { code.api.util.DynamicUtil.dynamicCodeExecutionEnabled }
+            _ <- code.util.Helper.booleanToFuture(s"${code.api.util.ErrorMessages.TooManyRequests} at most $dynamicCompileCallsPerMinute dry-run compiles per minute per user", 429, Some(cc)) { allowDynamicCompile(u.userId) }
+            body <- NewStyle.function.tryons(s"$InvalidJsonFormat The Json body should be the ${classOf[DynamicResourceDocCompileJsonV700].getSimpleName}", 400, Some(cc)) {
+              com.openbankproject.commons.util.JsonAliases.parse(cc.httpBody.getOrElse("")).extract[DynamicResourceDocCompileJsonV700]
+            }
+            _ <- code.util.Helper.booleanToFuture(s"""$InvalidJsonFormat The request_verb must be one of ["POST", "PUT", "GET", "DELETE"]""", cc = Some(cc)) {
+              Set("POST", "PUT", "GET", "DELETE").contains(body.request_verb)
+            }
+            result <- Future {
+              val start = System.currentTimeMillis()
+              val problems = scala.util.Try(code.api.dynamic.endpoint.helper.CompiledObjects.compileProblems(body.example_request_body, body.success_response_body, body.method_body)) match {
+                case scala.util.Success(ps) => ps
+                case scala.util.Failure(e) => List(code.api.util.DynamicUtil.CompileProblem(0, 0, "ERROR", Option(e.getMessage).getOrElse(e.toString)))
+              }
+              val dependencyError: Option[String] =
+                if (problems.nonEmpty) None
+                else scala.util.Try(code.api.dynamic.endpoint.helper.CompiledObjects(body.example_request_body, body.success_response_body, body.method_body).validateDependency()) match {
+                  case scala.util.Success(_) => None
+                  case scala.util.Failure(e: code.api.JsonResponseException) => Some(com.openbankproject.commons.util.JsonAliases.compactRender(e.jsonResponse.body))
+                  case scala.util.Failure(e) => Some(Option(e.getMessage).getOrElse(e.toString))
+                }
+              DynamicCompileResultJsonV700(
+                compiles = problems.isEmpty && dependencyError.isEmpty,
+                errors = problems.map(p => DynamicCompileErrorJsonV700(p.line, p.column, p.severity, p.message)),
+                dependency_error = dependencyError,
+                duration_ms = System.currentTimeMillis() - start
+              )
+            }
+          } yield result
+        }
+    }
+    resourceDocs += ResourceDoc(
+      implementedInApiVersion,
+      nameOf(compileDynamicResourceDoc),
+      "POST",
+      "/management/dynamic-resource-docs/compile",
+      "Compile Dynamic Resource Doc (dry run)",
+      s"""Compiles a Dynamic Resource Doc method body exactly as Create Dynamic Resource Doc would, and reports the result without storing anything.
+        |
+        |Send the fields that shape the compiled code: `request_verb`, `request_url`, the URL-encoded `method_body`, and the optional
+        |`example_request_body` and `success_response_body` (they become the generated `RequestRootJsonClass` / `ResponseRootJsonClass`).
+        |
+        |`errors` carry the compiler's messages with `line` and `column` relative to the method body you sent (the server's wrapper lines are
+        |subtracted; 0 when the compiler gave no position). When the body compiles and `dynamic_code_compile_validate_enable` is on,
+        |the dependency validator runs too and any forbidden call is reported in `dependency_error`. `compiles` is true only when both pass.
+        |
+        |Nothing is evaluated or cached, but compiling is a full scalac run, so the same rules apply as for creating: the
+        |`allow_user_generated_scala_code` kill switch, the create role, and at most $dynamicCompileCallsPerMinute calls per minute per user.
+        |
+        |Built for editors that let an author, or an assistant such as Opey, iterate on a body until it compiles before submitting it.
+        |
+        |${userAuthenticationMessage(true)}""".stripMargin,
+      JSONFactory700.dynamicResourceDocCompileJsonV700Example,
+      JSONFactory700.dynamicCompileResultJsonV700Example,
+      List($AuthenticatedUserIsRequired, InvalidJsonFormat, UserHasMissingRoles, DynamicCodeExecutionDisabled, code.api.util.ErrorMessages.TooManyRequests, UnknownError),
+      apiTagDynamicResourceDoc :: apiTagDynamic :: Nil,
+      Some(List(ApiRole.canCreateDynamicResourceDoc)),
+      http4sPartialFunction = Some(compileDynamicResourceDoc)
+    )
+
     // Route: GET /obp/v7.0.0/management/dynamic-code-approval-config
     // Lets a client (the API Manager create/edit pages) tell the maker up front whether a write will be
     // applied or queued for approval. Authenticated, no role: any user who can create an artefact needs this.
