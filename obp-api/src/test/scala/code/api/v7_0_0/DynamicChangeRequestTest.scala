@@ -46,7 +46,10 @@ class DynamicChangeRequestTest extends ServerSetupWithTestData {
   def dynamicEndpoint = baseRequest / "obp" / ApiShortVersions.`dynamic-endpoint`.toString
 
   // The local test.default.props may not enable dynamic code (CI does); these scenarios need it on.
-  private def dynamicCodeOn(): Unit = setPropsValues("allow_user_generated_scala_code" -> "true")
+  // Braced body on purpose: .github/scripts/check_test_isolation.py only recognises `def name {` as a helper.
+  private def dynamicCodeOn(): Unit = {
+    setPropsValues("allow_user_generated_scala_code" -> "true")
+  }
 
   private def enableMakerChecker(): Unit = {
     dynamicCodeOn()
