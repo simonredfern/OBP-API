@@ -103,6 +103,16 @@ object ErrorMessages {
   val InvalidFilterParameterFormat = "OBP-10016: Incorrect filter Parameters in URL. "
   val InvalidUrl = "OBP-10017: Incorrect URL Format. "
   val TooManyRequests = "OBP-10018: Too Many Requests."
+  // Three rate limiters, three codes, so a client can tell which counter it hit:
+  //  OBP-10018 the Consumer quota (RateLimitingUtil, post-auth, keyed by consumer_id or anonymous IP)
+  //  OBP-10060 the self-service limiter (SelfServiceRateLimiter, pre-auth, keyed by client IP)
+  //  OBP-10061 the authentication limiter (AuthRateLimiter, inside the credential check, keyed by IP and account)
+  val TooManyRequestsSelfService = "OBP-10060: Too Many Requests for a self-service endpoint."
+  val TooManyRequestsAuth = "OBP-10061: Too Many Requests for authentication. Too many login attempts from this address or for this account."
+  // Not an error: the text of the X-Rate-Limit-Warning header a self-service endpoint returns in
+  // shadow mode. SCOPE and LIMIT are replaced at runtime, e.g. "signup" and "5 per hour".
+  // See SelfServiceRateLimiter.warningMessage.
+  val RateLimitFutureWarning = "OBP-10059: Could conflict with a Future Rate Limit: This request might exceed the rate limit for SCOPE (LIMIT) in the future."
   val InvalidBoolean = "OBP-10019: Invalid Boolean. Could not convert value to a boolean type."
   val InvalidJsonContent = "OBP-10020: Incorrect json."
   val InvalidConnectorName = "OBP-10021: Incorrect Connector name."
@@ -1089,6 +1099,8 @@ object ErrorMessages {
     DynamicEndpointNotFoundByDynamicEndpointId -> 404,
 //    NotImplemented -> 501, // 400 or 501
     TooManyRequests -> 429,
+    TooManyRequestsSelfService -> 429,
+    TooManyRequestsAuth -> 429,
     ResourceDoesNotExist -> 404,
     AuthenticatedUserIsRequired -> 401,
     DirectLoginInvalidToken -> 401,

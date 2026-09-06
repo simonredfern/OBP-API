@@ -781,7 +781,8 @@ object APIUtil extends MdcLoggable with CustomJsonFormats{
       message.contains(extractErrorMessageCode(requestTimeout))
     }
     def check429(message: String): Boolean = {
-      message.contains(extractErrorMessageCode(TooManyRequests))
+      List(TooManyRequests, TooManyRequestsSelfService, TooManyRequestsAuth)
+        .exists(m => message.contains(extractErrorMessageCode(m)))
     }
     val (code, responseHeaders) =
       message match {

@@ -3131,6 +3131,11 @@ object Http4s510 {
       |
       |This endpoint provides **secure, validated consumer registration** unlike the standard `/management/consumers` endpoint.
       |
+      |**Not for AI agents or ordinary applications.** This is the PSD2 path and requires a QWAC certificate that matches a
+      |pre-registered Regulated Entity. An agent or app that simply needs credentials should use OAuth2 dynamic client
+      |registration (RFC 7591) on the OBP-OIDC identity provider instead; see the glossary entry "Signal Channels",
+      |section "Getting credentials as an agent".
+      |
       |**How it works (for comprehension flow):**
       |
       |1. **Extract JWT from request**: Parse the signed JWT from the request body

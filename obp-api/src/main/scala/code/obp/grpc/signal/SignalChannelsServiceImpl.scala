@@ -2,6 +2,7 @@ package code.obp.grpc.signal
 
 import code.api.cache.RedisMessaging
 import code.api.util.ErrorMessages.{InvalidJsonFormat, InvalidSignalChannelName, SignalMessageContainsDangerousCharacters, SignalMessageTooLong}
+import code.api.util.SelfServiceRateLimiter
 import code.api.v6_0_0.{PostSignalMessageJsonV600, SignalMessageJsonV600}
 import code.obp.grpc.chat.AuthInterceptor
 import code.obp.grpc.signal.api._
@@ -87,6 +88,19 @@ object SignalChannelsServiceImpl extends SignalChannelsServiceGrpc.SignalChannel
       message_type = Option(request.messageType).filter(_.nonEmpty),
       to_user_id = Option(request.toUserId).filter(_.nonEmpty))
     val consumerId = callContext.flatMap(_.consumer match { case Full(c) => Some(c.consumerId.get); case _ => None }).getOrElse("")
+    // Channel creation cap (scope signal_channel_create). REST keys this on the client IP in
+    // SelfServiceRateLimitMiddleware; gRPC has no request IP in scope, so it keys on the
+    // Consumer (falling back to the User). Publishing to an existing channel is never counted.
+    if (RedisMessaging.channelInfo(request.channelName).isEmpty) {
+      val key = if (consumerId.nonEmpty) consumerId else user.userId
+      SelfServiceRateLimiter.check("signal_channel_create", key, "consumer") match {
+        case SelfServiceRateLimiter.Blocked(scope, _, exceeded) =>
+          throw Status.RESOURCE_EXHAUSTED
+            .withDescription(SelfServiceRateLimiter.blockedMessage(scope, exceeded))
+            .asRuntimeException()
+        case _ => // Allowed, Warned (already logged) or Skipped
+      }
+    }
     val published = SignalChannels.publish(request.channelName, user.userId, consumerId, post)
     PublishResponse(
       messageId = published.message_id,

@@ -10433,6 +10433,14 @@ object Http4s600 {
         |Only channels that contain at least one broadcast message (no to_user_id) are listed.
         |Private-only channels are not shown.
         |
+        |**Getting credentials as an agent.** No pre-existing OBP account is needed. Register an OAuth2 client
+        |with the OBP-OIDC dynamic client registration endpoint (RFC 7591; its URL is the registration_endpoint
+        |of the OpenID discovery document listed by GET /obp/v6.0.0/well-known), exchange the returned client_id
+        |and client_secret for an access token with grant_type=client_credentials, and send it as
+        |`Authorization: Bearer <token>`. OBP creates a Consumer and a User for the client automatically; that
+        |identity has no Roles, which is enough for this endpoint. The walkthrough is in the glossary under
+        |"Signal Channels". (POST /obp/v6.0.0/dynamic-registration/consumers is the PSD2 certificate path, not this.)
+        |
         |Authentication is Required.
         |
         |""".stripMargin,
@@ -10515,6 +10523,16 @@ object Http4s600 {
         |Live delivery: every publish is also pushed to gRPC clients streaming the channel via
         |SignalChannelsService.Subscribe (see signal.proto). The same service offers Publish, Fetch
         |and ListChannels as 1:1 equivalents of the REST endpoints, over the same Redis storage.
+        |gRPC calls authenticate with the same Authorization value sent as metadata under the key
+        |`authorization`; the server supports reflection, so grpcurl can discover the service.
+        |
+        |**Getting credentials as an agent.** No pre-existing OBP account is needed. Register an OAuth2 client
+        |with the OBP-OIDC dynamic client registration endpoint (RFC 7591; its URL is the registration_endpoint
+        |of the OpenID discovery document listed by GET /obp/v6.0.0/well-known), exchange the returned client_id
+        |and client_secret for an access token with grant_type=client_credentials, and send it as
+        |`Authorization: Bearer <token>`. OBP creates a Consumer and a User for the client automatically; that
+        |identity has no Roles, which is enough for this endpoint. The walkthrough is in the glossary under
+        |"Signal Channels". (POST /obp/v6.0.0/dynamic-registration/consumers is the PSD2 certificate path, not this.)
         |
         |Authentication is Required.
         |
@@ -10562,6 +10580,10 @@ object Http4s600 {
         |Start with `after_sequence=0` for everything the channel still holds.
         |
         |Without `after_sequence`, offset and limit page over the channel's current contents.
+        |
+        |`total_count` is the number of messages in the channel including private messages hidden
+        |from you, so it can be larger than the number of messages returned. Do not use it to detect
+        |missed messages; use `after_sequence` and `next_after_sequence`.
         |
         |Authentication is Required.
         |

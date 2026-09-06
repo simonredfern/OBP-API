@@ -169,7 +169,11 @@ object Http4sApp extends MdcLoggable {
       // least obvious, a proxy forwarding the header over a hop with no client certificate, enables
       // no TLS middleware at all, so neither step can live in Http4sServer's mtls.enabled branch.
       val req = CallerCertificate.resolveCaller(Psd2CertIngress.canonicalize(rawReq))
-      app.run(req)
+      // Self-service rate limiting (sign-up, password reset, consent requests, consumer
+      // registration, lookups, signal channel creation) runs here, before routing, keyed by the
+      // client IP. In shadow mode it only adds X-Rate-Limit-* headers; in enforce mode a trip
+      // answers 429 without running the route. See SelfServiceRateLimitMiddleware.
+      SelfServiceRateLimitMiddleware(req)(app.run)
         .map(resp => stripBodyForHead(req, Http4sStandardHeaders(req, resp)))
         .handleErrorWith { e =>
           logger.error(s"[Http4sApp] Uncaught exception: ${req.method} ${req.uri} - ${e.getMessage}", e)

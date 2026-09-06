@@ -8,7 +8,7 @@ import code.api.Constant._
 import code.api.ResourceDocs1_4_0.SwaggerDefinitionsJSON._
 import code.api.util.APIUtil.{EmptyBody, _}
 import code.api.util.{APIUtil, ApiRole, CallContext, CustomJsonFormats, Glossary, NewStyle}
-import code.api.util.ApiRole.{canAttachOpenCorridorPromise, canConfigureAmqpBankBroker, canGetMessageOutbox, canRetryMessageOutbox, canSettleOpenCorridor, canCreateAccount, canCreateEntitlementAtAnyBank, canCreateEntitlementAtOneBank, canCreateMetricsArchiveRun, canCreateOrganisation, canCreateRoutingScheme, canCreateTestEmail, canCreateUtilityVendResult, canDeleteEntitlementAtAnyBank, canDeleteOrganisation, canDeleteRoutingScheme, canDeleteSchedulerJobLock, canGetAccountAccessTrace, canGetAnyOrganisation, canGetAnyUser, canGetCacheConfig, canGetCacheInfo, canGetCacheNamespaces, canGetConnectorHealth, canGetCustomersAtOneBank, canGetDatabasePoolInfo, canGetMetricsDiagnostics, canGetMigrations, canGetSchedulerJobLocks, canReadMetrics, canUpdateBankSupportedRoutingScheme, canUpdateOrganisation, canUpdateRoutingScheme, canUpdateSystemView}
+import code.api.util.ApiRole.{canAttachOpenCorridorPromise, canConfigureAmqpBankBroker, canGetMessageOutbox, canRetryMessageOutbox, canSettleOpenCorridor, canCreateAccount, canCreateEntitlementAtAnyBank, canCreateEntitlementAtOneBank, canCreateMetricsArchiveRun, canCreateOrganisation, canCreateRoutingScheme, canCreateTestEmail, canCreateUtilityVendResult, canDeleteEntitlementAtAnyBank, canDeleteOrganisation, canDeleteRoutingScheme, canDeleteSchedulerJobLock, canGetAccountAccessTrace, canGetAnyOrganisation, canGetAnyUser, canGetCacheConfig, canGetCacheInfo, canGetCacheNamespaces, canGetConfig, canGetConnectorHealth, canGetCustomersAtOneBank, canGetDatabasePoolInfo, canGetMetricsDiagnostics, canGetMigrations, canGetSchedulerJobLocks, canReadMetrics, canUpdateBankSupportedRoutingScheme, canUpdateOrganisation, canUpdateRoutingScheme, canUpdateSystemView}
 import code.api.util.CommonsEmailWrapper
 import code.model.dataAccess.{AuthUser, BankAccountCreation, MappedBank, ResourceUser}
 import code.consent.Consents
@@ -6153,6 +6153,47 @@ object Http4s700 {
       http4sPartialFunction = Some(getMyDynamicChangeRequests)
     )
 
+    // Route: GET /obp/v7.0.0/management/dynamic-code-approval-config
+    // Lets a client (the API Manager create/edit pages) tell the maker up front whether a write will be
+    // applied or queued for approval. Authenticated, no role: any user who can create an artefact needs this.
+    val getDynamicCodeApprovalConfig: HttpRoutes[IO] = HttpRoutes.of[IO] {
+      case req @ GET -> `prefixPath` / "management" / "dynamic-code-approval-config" =>
+        EndpointHelpers.withUser(req) { (_, _) =>
+          Future.successful(JSONFactory700.DynamicCodeApprovalConfigJsonV700(
+            dynamic_code_execution_enabled = code.api.util.DynamicUtil.dynamicCodeExecutionEnabled,
+            requires_approval        = MakerChecker.enabled,
+            target_types             = if (MakerChecker.enabled) MakerChecker.managedTargetTypes.toList.sorted else Nil,
+            delete_requires_approval = MakerChecker.enabled && MakerChecker.requireApprovalForDelete,
+            request_ttl_hours        = MakerChecker.requestTtlHours,
+            approval_role            = ApiRole.canApproveDynamicChangeRequest.toString
+          ))
+        }
+    }
+    resourceDocs += ResourceDoc(
+      implementedInApiVersion,
+      nameOf(getDynamicCodeApprovalConfig),
+      "GET",
+      "/management/dynamic-code-approval-config",
+      "Get Dynamic Code Approval Config",
+      s"""Returns whether maker/checker approval gates dynamic code and configuration on this instance, so a client can tell the maker before they submit.
+        |
+        |* `dynamic_code_execution_enabled` — the `allow_user_generated_scala_code` prop, the master kill switch. When false, creating or running any user-supplied Scala fails with $DynamicCodeExecutionDisabled, whatever the approval settings say.
+        |* `requires_approval` — the `dynamic_code_requires_approval` prop. When false every other field is informational and writes are applied directly.
+        |* `target_types` — the `dynamic_code_approval_target_types` prop: the target types whose create, update and delete calls are queued as Dynamic Change Requests. Empty when approval is off.
+        |* `delete_requires_approval` — the `dynamic_code_delete_requires_approval` prop, combined with `requires_approval`.
+        |* `request_ttl_hours` — the `dynamic_code_approval_request_ttl_hours` prop: INITIATED requests older than this expire. 0 means never.
+        |* `approval_role` — the Role a checker must hold to approve, reject or deactivate.
+        |
+        |$makerCheckerIntro
+        |No Role is required. ${userAuthenticationMessage(true)}""".stripMargin,
+      EmptyBody,
+      JSONFactory700.dynamicCodeApprovalConfigJsonV700Example,
+      List($AuthenticatedUserIsRequired, UnknownError),
+      apiTagDynamicChangeRequest :: apiTagDynamic :: apiTagApi :: Nil,
+      None,
+      http4sPartialFunction = Some(getDynamicCodeApprovalConfig)
+    )
+
     val getDynamicChangeRequest: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ GET -> `prefixPath` / "management" / "dynamic-change-requests" / changeRequestId if changeRequestId.nonEmpty =>
         EndpointHelpers.withUser(req) { (_, cc) =>
@@ -6393,6 +6434,88 @@ object Http4s700 {
     //
     // REQUIREMENT: each `val endpoint` must be declared BEFORE its `resourceDocs +=`
     // so that `Some(endpoint)` captures the initialized route, not null.
+    // ─── getConsumerRateLimits ─────────────────────────────────────────────
+    // Every per-consumer rate limit row on the instance, so an operator can see what overrides the
+    // consumer limiter's defaults without opening each consumer. Per-consumer reads stay in v5.1.0 / v6.0.0.
+    lazy val getConsumerRateLimits: HttpRoutes[IO] = HttpRoutes.of[IO] {
+      case req @ GET -> `prefixPath` / "management" / "rate-limits" =>
+        EndpointHelpers.withUser(req) { (_, _) =>
+          for {
+            rows <- code.ratelimiting.RateLimitingDI.rateLimiting.vend.getAll()
+            consumerIds = rows.map(_.consumerId).distinct
+            consumers <- Future.traverse(consumerIds)(id =>
+              code.consumer.Consumers.consumers.vend.getConsumerByConsumerIdFuture(id).map(box => id -> box.map(_.name.get).openOr(""))
+            )
+            names = consumers.toMap
+            now = new java.util.Date()
+          } yield JSONFactory700.ConsumerRateLimitsJsonV700(
+            rows.sortBy(r => (names.getOrElse(r.consumerId, ""), r.consumerId, r.fromDate.getTime))
+              .map(r => JSONFactory700.createConsumerRateLimitJsonV700(r, names.getOrElse(r.consumerId, ""), now))
+          )
+        }
+    }
+
+    resourceDocs += ResourceDoc(
+      implementedInApiVersion,
+      nameOf(getConsumerRateLimits),
+      "GET",
+      "/management/rate-limits",
+      "Get Rate Limits for all Consumers",
+      s"""Returns every per-consumer rate limit row on this instance, across all Consumers, sorted by Consumer name.
+         |
+         |These rows are what override the consumer limiter's defaults (see Get Rate Limiter Config, whose `consumer_default` row applies
+         |to a Consumer with no rows of its own). `is_active` is whether `from_date`..`to_date` covers now. `api_version`, `api_name`
+         |and `bank_id` narrow a row to one endpoint or bank; all absent means the row applies to every call the Consumer makes.
+         |-1 means unlimited and 0 blocks every call.
+         |
+         |For one Consumer's rows use Get Rate Limits for a Consumer (v5.1.0); to change them use the v6.0.0 endpoints.
+         |
+         |${userAuthenticationMessage(true)}
+         |""".stripMargin,
+      EmptyBody,
+      JSONFactory700.consumerRateLimitsJsonV700Example,
+      List($AuthenticatedUserIsRequired, UserHasMissingRoles, UnknownError),
+      List(apiTagRateLimits, apiTagConsumer, apiTagApi),
+      Some(List(ApiRole.canReadCallLimits)),
+      http4sPartialFunction = Some(getConsumerRateLimits)
+    )
+
+    // ─── getRateLimiterConfig ──────────────────────────────────────────────
+    lazy val getRateLimiterConfig: HttpRoutes[IO] = HttpRoutes.of[IO] {
+      case req @ GET -> `prefixPath` / "management" / "rate-limiter-config" =>
+        EndpointHelpers.withUser(req) { (_, _) =>
+          Future(JSONFactory700.createRateLimitersJsonV700())
+        }
+    }
+
+    resourceDocs += ResourceDoc(
+      implementedInApiVersion,
+      nameOf(getRateLimiterConfig),
+      "GET",
+      "/management/rate-limiter-config",
+      "Get Rate Limiter Config",
+      s"""Returns the live configuration of the three rate limiters on this instance, in the order they are checked:
+         |
+         |1. **self_service** runs before routing and authentication, keyed by client IP address, on the endpoints anyone can call before the bank has granted them anything. A trip answers 429 `OBP-10060`.
+         |2. **authentication** runs inside the credential check, keyed by IP address and account. A trip answers 429 `OBP-10061`.
+         |3. **consumer** runs after authentication, keyed by Consumer, or by IP address for anonymous calls. A trip answers 429 `OBP-10018`.
+         |
+         |`mode` is `shadow` (trips are logged and reported in the `X-Rate-Limit-Warning` header, the request is allowed) or `enforce` (429).
+         |In `limits`, -1 means unlimited and 0 blocks every call; windows a limiter does not have are absent. The consumer limiter's
+         |`consumer_default` row is what applies to a Consumer with no rate limit rows of its own.
+         |
+         |See the Rate Limiting glossary entry.
+         |
+         |${userAuthenticationMessage(true)}
+         |""".stripMargin,
+      EmptyBody,
+      JSONFactory700.rateLimitersJsonV700Example,
+      List($AuthenticatedUserIsRequired, UserHasMissingRoles, UnknownError),
+      List(apiTagRateLimits, apiTagSystem, apiTagApi),
+      Some(List(canGetConfig)),
+      http4sPartialFunction = Some(getRateLimiterConfig)
+    )
+
     val allRoutes: HttpRoutes[IO] = {
       val sorted = resourceDocs
         .sortBy(rd => -rd.requestUrl.split("/").count(_.nonEmpty))

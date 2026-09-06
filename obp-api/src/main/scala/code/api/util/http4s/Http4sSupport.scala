@@ -616,6 +616,10 @@ object Http4sCallContextBuilder {
    * Extract the trusted client IP. Defaults to the immediate socket peer; consults a
    * forwarded-for header only when `trust.proxy.enabled = true`. See [[RemoteIpUtil]].
    */
+  /** The trusted client IP for a request, as CallContext.ipAddress would carry it. Public so
+   *  request-level middleware (SelfServiceRateLimitMiddleware) keys on the same value. */
+  def clientIp(request: Request[IO]): String = extractIpAddress(request)
+
   private def extractIpAddress(request: Request[IO]): String = {
     val socketPeer = request.remoteAddr.map(_.toUriString).getOrElse("")
     RemoteIpUtil.resolveClientIp(
