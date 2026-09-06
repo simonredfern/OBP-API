@@ -23,6 +23,8 @@ import org.apache.commons.lang3.StringUtils
 import com.openbankproject.commons.model.{AccountAttribute, AccountId, AccountRoutingJsonV121, AmountOfMoneyJsonV121, BankAccount, BankId, BankIdAccountId, CoreAccount, TransactionRequest, TransactionRequestCommonBodyJSON, User}
 import com.openbankproject.commons.util.ApiVersion
 import java.util.Date
+import org.json4s.{Extraction, JValue}
+import org.json4s.JsonAST.{JNothing, JString}
 import net.liftweb.common.Full
 import net.liftweb.mapper.{Ascending, By, By_<=, Descending, MaxRows, OrderBy}
 
@@ -40,7 +42,10 @@ object JSONFactory700 extends MdcLoggable with code.api.util.CustomJsonFormats {
     updated_by_user_id: Option[String],
     method_body_hash: Option[String],
     created_at: Option[String],
-    updated_at: Option[String]
+    updated_at: Option[String],
+    // maker/checker: the body hash a checker approved (None when never approved) and the active flag
+    approved_hash: Option[String] = None,
+    is_active: Option[Boolean] = None
   )
   case class DynamicResourceDocProvenanceJsonV700(dynamic_resource_doc: JsonDynamicResourceDoc, provenance: ProvenanceJsonV700)
   case class DynamicResourceDocsProvenanceJsonV700(dynamic_resource_docs: List[DynamicResourceDocProvenanceJsonV700])
@@ -57,7 +62,8 @@ object JSONFactory700 extends MdcLoggable with code.api.util.CustomJsonFormats {
       DynamicResourceDoc.getJsonDynamicResourceDoc(entity),
       ProvenanceJsonV700(
         blankToNone(entity.CreatedByUserId.get), blankToNone(entity.UpdatedByUserId.get),
-        blankToNone(entity.MethodBodyHash.get), formatDateOpt(entity.createdAt.get), formatDateOpt(entity.updatedAt.get))
+        blankToNone(entity.MethodBodyHash.get), formatDateOpt(entity.createdAt.get), formatDateOpt(entity.updatedAt.get),
+        blankToNone(entity.ApprovedHash.get), Some(entity.IsActive.get))
     )
 
   def createConnectorMethodProvenanceJsonV700(entity: ConnectorMethod): ConnectorMethodProvenanceJsonV700 =
@@ -65,7 +71,8 @@ object JSONFactory700 extends MdcLoggable with code.api.util.CustomJsonFormats {
       ConnectorMethod.getJsonConnectorMethod(entity),
       ProvenanceJsonV700(
         blankToNone(entity.CreatedByUserId.get), blankToNone(entity.UpdatedByUserId.get),
-        blankToNone(entity.MethodBodyHash.get), formatDateOpt(entity.createdAt.get), formatDateOpt(entity.updatedAt.get))
+        blankToNone(entity.MethodBodyHash.get), formatDateOpt(entity.createdAt.get), formatDateOpt(entity.updatedAt.get),
+        blankToNone(entity.ApprovedHash.get), Some(entity.IsActive.get))
     )
 
   def createDynamicMessageDocProvenanceJsonV700(entity: DynamicMessageDoc): DynamicMessageDocProvenanceJsonV700 =
@@ -73,7 +80,83 @@ object JSONFactory700 extends MdcLoggable with code.api.util.CustomJsonFormats {
       DynamicMessageDoc.getJsonDynamicMessageDoc(entity),
       ProvenanceJsonV700(
         blankToNone(entity.CreatedByUserId.get), blankToNone(entity.UpdatedByUserId.get),
-        blankToNone(entity.MethodBodyHash.get), formatDateOpt(entity.createdAt.get), formatDateOpt(entity.updatedAt.get))
+        blankToNone(entity.MethodBodyHash.get), formatDateOpt(entity.createdAt.get), formatDateOpt(entity.updatedAt.get),
+        blankToNone(entity.ApprovedHash.get), Some(entity.IsActive.get))
+    )
+
+  // ─── Maker/checker: dynamic change requests (design: MAKER_CHECKER_DYNAMIC_CODE_DESIGN.md) ───
+  case class PostDynamicChangeRequestJsonV700(
+    target_type: String,
+    operation: String,
+    target_id: Option[String],
+    bank_id: Option[String],
+    proposed_payload: JValue,
+    business_justification: Option[String]
+  )
+  case class PostApproveDynamicChangeRequestJsonV700(payload_hash: String, checker_comment: Option[String])
+  case class PostRejectDynamicChangeRequestJsonV700(comment: String)
+  case class PostWithdrawDynamicChangeRequestJsonV700(comment: Option[String])
+  case class PostDeactivateDynamicArtefactJsonV700(comment: Option[String])
+
+  case class DynamicChangeRequestJsonV700(
+    dynamic_change_request_id: String,
+    target_type: String,
+    target_id: String,
+    operation: String,
+    status: String,
+    request_verb: String,
+    request_path: String,
+    payload_hash: String,
+    current_payload_hash: String,
+    proposed_payload: JValue,
+    current_payload: JValue,
+    requestor_user_id: String,
+    business_justification: String,
+    checker_user_id: String,
+    checker_comment: String,
+    created_at: String,
+    actioned_at: String,
+    expires_at: String
+  )
+  case class DynamicChangeRequestsJsonV700(dynamic_change_requests: List[DynamicChangeRequestJsonV700])
+
+  private def parseOrString(s: String): JValue =
+    com.openbankproject.commons.util.JsonAliases.parseOpt(Option(s).getOrElse("")).getOrElse(if (StringUtils.isBlank(s)) JNothing else JString(s))
+
+  /** The live target's JSON, so a client can diff proposed vs current; JNothing when it does not exist. */
+  def currentPayloadOf(targetType: String, targetId: String): JValue = {
+    import code.abacrule.MappedAbacRuleProvider
+    import com.openbankproject.commons.model.enums.DynamicChangeRequestTargetType._
+    if (StringUtils.isBlank(targetId)) JNothing
+    else scala.util.Try(com.openbankproject.commons.model.enums.DynamicChangeRequestTargetType.withName(targetType)).toOption.map {
+      case DYNAMIC_RESOURCE_DOC => code.dynamicResourceDoc.DynamicResourceDocProvider.provider.vend.getById(None, targetId).map(Extraction.decompose(_)).getOrElse(JNothing)
+      case DYNAMIC_MESSAGE_DOC  => code.dynamicMessageDoc.DynamicMessageDocProvider.provider.vend.getById(None, targetId).map(Extraction.decompose(_)).getOrElse(JNothing)
+      case CONNECTOR_METHOD     => code.connectormethod.ConnectorMethodProvider.provider.vend.getById(targetId).map(Extraction.decompose(_)).getOrElse(JNothing)
+      case ABAC_RULE            => MappedAbacRuleProvider.getAbacRuleById(targetId).map(r => Extraction.decompose(JSONFactory600.createAbacRuleJsonV600(r))).getOrElse(JNothing)
+      case _                    => JNothing
+    }.getOrElse(JNothing)
+  }
+
+  def createDynamicChangeRequestJsonV700(r: code.dynamicchangerequest.DynamicChangeRequestTrait): DynamicChangeRequestJsonV700 =
+    DynamicChangeRequestJsonV700(
+      dynamic_change_request_id = r.dynamicChangeRequestId,
+      target_type = r.targetType,
+      target_id = r.targetId,
+      operation = r.operation,
+      status = r.status,
+      request_verb = r.requestVerb,
+      request_path = r.requestPath,
+      payload_hash = r.payloadHash,
+      current_payload_hash = r.currentPayloadHash,
+      proposed_payload = parseOrString(r.proposedPayload),
+      current_payload = currentPayloadOf(r.targetType, r.targetId),
+      requestor_user_id = r.requestorUserId,
+      business_justification = r.businessJustification,
+      checker_user_id = r.checkerUserId,
+      checker_comment = r.checkerComment,
+      created_at = APIUtil.formatDate(r.created),
+      actioned_at = r.actionedAt.map(APIUtil.formatDate).getOrElse(""),
+      expires_at = r.expiresAt.map(APIUtil.formatDate).getOrElse("")
     )
 
   case class ErrorMessageEntryJsonV700(code: String, name: String, message: String)

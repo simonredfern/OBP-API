@@ -736,6 +736,19 @@ object ErrorMessages {
   val SmtpRecipientRejected = "OBP-30344: SMTP server rejected the recipient or message. The From address may be unauthorised, the recipient may be invalid, or the message may have failed policy/anti-spam checks."
   val SmtpProtocolError = "OBP-30345: SMTP protocol error from the mail server."
 
+  // Maker/checker for dynamic code and configuration (DynamicChangeRequest)
+  val DynamicChangeRequestNotFound = "OBP-30346: Dynamic change request not found. Please specify a valid CHANGE_REQUEST_ID."
+  val DynamicChangeRequestNotInitiated = "OBP-30347: Dynamic change request is not in INITIATED status. It has already been approved, rejected, withdrawn or has expired."
+  val DynamicChangeRequestHashMismatch = "OBP-30348: The payload_hash in the approval does not match the stored hash of the change request. Re-read the request and approve exactly the content shown."
+  val DynamicChangeRequestStale = "OBP-30349: The target of this change request has changed since it was submitted. Withdraw it and submit a new request against the current version."
+  val DynamicChangeRequestTargetTypeNotManaged = "OBP-30350: This target type is not managed by maker/checker on this instance (see dynamic_code_approval_target_types)."
+  val DynamicChangeRequestApprovalRequired = "OBP-30351: Maker/checker is enabled for this target type. The change has been queued as a dynamic change request and must be approved by a second user before it takes effect."
+  val DynamicChangeRequestTargetNotFound = "OBP-30352: The target of the dynamic change request does not exist."
+  val DynamicChangeRequestNotRequestor = "OBP-30353: Only the requestor of a dynamic change request can withdraw it."
+  val DynamicChangeRequestApplyFailed = "OBP-30354: The dynamic change request was approved but could not be applied. Its status is now FAILED; see checker_comment for the reason."
+  val DynamicArtefactInactive = "OBP-30355: This dynamic artefact is deactivated and will not be executed."
+  val DynamicArtefactNotApproved = "OBP-30356: This dynamic artefact's current code has not been approved by a checker and will not be executed."
+
   // Branch related messages
   val BranchesNotFoundLicense = "OBP-32001: No branches available. License may not be set."
   val BranchesNotFound = "OBP-32002: No branches available."

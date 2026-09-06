@@ -1739,6 +1739,32 @@ dynamic_code_compile_validate_dependencies=[\
       PractiseEndpoint.getClass.getTypeName + "*" -> "*"\
 ]
 
+# --- Dynamic code requires approval (maker/checker, see MAKER_CHECKER_DYNAMIC_CODE_DESIGN.md) ---
+# dynamic_code_requires_approval=true enforces two things for the target types listed below:
+#  1. Writes are queued, not applied. Create/update/delete via the v4.0.0/v6.0.0 endpoints still check the
+#     caller's role, validate and compile the body, then store a DynamicChangeRequest and answer 202 Accepted.
+#     A DIFFERENT user holding CanApproveDynamicChangeRequest applies it by quoting the payload's SHA-256 at
+#     /obp/v7.0.0/management/dynamic-change-requests/ID/approval.
+#  2. The runtime executes only approved code. A row is served/compiled only when it is active and its body
+#     hash equals the hash a checker approved. Rows edited or inserted directly in the database are not run.
+# The first boot with this true seeds the approved hash of every pre-existing row from its current body,
+# once per database (logged in MigrationScriptLog as seedDynamicCodeApprovedHashes). After that, the only way
+# a row becomes executable is a checker's approval (or an ACTIVATE change request for a row that has none).
+# Approval is system level: dynamic code runs in the shared JVM, so a bank-level artefact is still approved by
+# a system-level checker. Deactivation is a direct action by a single approver (four eyes to enable, one pair
+# to disable) and works whether or not this prop is set.
+# Defaults to false: sandboxes and local development keep today's behaviour, nothing is queued or gated.
+dynamic_code_requires_approval=false
+# Which target types the above applies to. Phase 1 supports the four code families.
+dynamic_code_approval_target_types=DYNAMIC_RESOURCE_DOC,DYNAMIC_MESSAGE_DOC,CONNECTOR_METHOD,ABAC_RULE
+# Deleting does not expand capability but does break consumers; set false to let makers delete directly.
+dynamic_code_delete_requires_approval=true
+# INITIATED requests older than this are marked EXPIRED when next read. 0 disables expiry.
+dynamic_code_approval_request_ttl_hours=168
+# Connector methods and dynamic message docs are looked up per call, so their active/approved check is
+# memoised for this long. An approval or deactivation takes up to this long to reach those two families.
+dynamic_code_approval_guard_cache_ttl_seconds=10
+
 ###################################################
 ## "Optional" / "Placeholder" JSON field behaviour
 # Sometimes our connectors or data imports might populate fields with default, null or placeholder values such as empty strings, default dates and empty lists

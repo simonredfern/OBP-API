@@ -485,6 +485,28 @@ object Http4sRequestAttributes {
     }
 
     /**
+     * Execute business logic requiring validated User that returns a (result, statusCode) pair.
+     * A 204 renders with no body; any other status renders the result as JSON. Used by write
+     * endpoints that answer 201/200/204 when applied directly and 202 Accepted when maker/checker
+     * queues the change as a DynamicChangeRequest instead.
+     */
+    def withUserAndStatus[A](req: Request[IO])(f: (User, CallContext) => Future[(A, Int)])(implicit formats: Formats): IO[Response[IO]] = {
+      implicit val cc: CallContext = req.callContext
+      val io = for {
+        user   <- IO.fromOption(cc.user.toOption)(new RuntimeException(AuthenticatedUserIsRequired))
+        result <- RequestScopeConnection.fromFuture(f(user, cc))
+      } yield result
+      io.attempt.flatMap {
+        case Right((_, 204)) => NoContent().flatTap(recordMetric("", _))
+        case Right((result, code)) =>
+          val jsonString = prettyRender(Extraction.decompose(result))
+          val status = Status.fromInt(code).getOrElse(Status.Ok)
+          IO.pure(Response[IO](status).withEntity(jsonString).withContentType(jsonContentType)).flatTap(recordMetric(result, _))
+        case Left(err) => ErrorResponseConverter.toHttp4sResponse(err, cc).flatTap(recordMetric(err.getMessage, _))
+      }
+    }
+
+    /**
      * Execute DELETE business logic (no auth required).
      * Returns 204 No Content on success, converts errors via ErrorResponseConverter.
      */

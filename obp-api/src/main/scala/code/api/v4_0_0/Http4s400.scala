@@ -57,6 +57,10 @@ import code.model.dataAccess.BankAccountCreation
 import code.connectormethod.{JsonConnectorMethod, JsonConnectorMethodMethodBody}
 import code.dynamicMessageDoc.JsonDynamicMessageDoc
 import code.dynamicResourceDoc.JsonDynamicResourceDoc
+import code.dynamicchangerequest.MakerChecker
+import code.api.v7_0_0.JSONFactory700.createDynamicChangeRequestJsonV700
+import com.openbankproject.commons.model.enums.DynamicChangeRequestTargetType.{CONNECTOR_METHOD, DYNAMIC_MESSAGE_DOC, DYNAMIC_RESOURCE_DOC}
+import com.openbankproject.commons.model.enums.{DynamicChangeRequestOperation => ChangeOp}
 import code.userlocks.UserLocksProvider
 import code.util.JsonSchemaUtil
 import code.validation.JsonValidation
@@ -9215,7 +9219,7 @@ object Http4s400 {
 
     lazy val createConnectorMethod: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ POST -> `prefixPath` / "management" / "connector-methods" =>
-        EndpointHelpers.executeFutureCreated(req) {
+        EndpointHelpers.executeFutureWithStatus(req) {
           val cc = req.callContext
           val rawBody = cc.httpBody.getOrElse("")
           for {
@@ -9239,14 +9243,17 @@ object Http4s400 {
               else ""
             _ <- code.util.Helper.booleanToFuture(errorMsg, cc = callContext) { connectorMethod.isDefined }
             _ = Validation.validateDependency(connectorMethod.head)
-            (created, _) <- NewStyle.function.createJsonConnectorMethod(jsonConnectorMethod, callContext)
-          } yield created
+            result <- interceptOrApply(CONNECTOR_METHOD, ChangeOp.CREATE, None, 201, cc) {
+              NewStyle.function.createJsonConnectorMethod(jsonConnectorMethod, callContext).map(_._1)
+            }
+          } yield result
         }
     }
 
     lazy val updateConnectorMethod: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ PUT -> `prefixPath` / "management" / "connector-methods" / connectorMethodId =>
-        EndpointHelpers.executeAndRespond(req) { cc =>
+        EndpointHelpers.executeFutureWithStatus(req) {
+          val cc = req.callContext
           val rawBody = cc.httpBody.getOrElse("")
           for {
             _ <- code.util.Helper.booleanToFuture(DynamicCodeExecutionDisabled, cc = Some(cc)) { DynamicUtil.dynamicCodeExecutionEnabled }
@@ -9266,9 +9273,11 @@ object Http4s400 {
               else ""
             _ <- code.util.Helper.booleanToFuture(errorMsg, cc = callContext) { connectorMethod.isDefined }
             _ = Validation.validateDependency(connectorMethod.head)
-            (updated, _) <- NewStyle.function.updateJsonConnectorMethod(
-              connectorMethodId, connectorMethodBody.methodBody, connectorMethodBody.programmingLang, callContext)
-          } yield updated
+            result <- interceptOrApply(CONNECTOR_METHOD, ChangeOp.UPDATE, Some(connectorMethodId), 200, cc) {
+              NewStyle.function.updateJsonConnectorMethod(
+                connectorMethodId, connectorMethodBody.methodBody, connectorMethodBody.programmingLang, callContext).map(_._1)
+            }
+          } yield result
         }
     }
 
@@ -9429,7 +9438,22 @@ object Http4s400 {
       }
     }
 
-    private def createDynamicResourceDocImpl(bankId: Option[String], rawBody: String, cc: CallContext): Future[JsonDynamicResourceDoc] = {
+    /**
+     * Maker/checker interception (MAKER_CHECKER_DYNAMIC_CODE_DESIGN.md): after the body has been
+     * validated and compiled exactly as before, a managed target type is queued as a
+     * DynamicChangeRequest and answered with 202 instead of being applied.
+     */
+    private def interceptOrApply[A](targetType: com.openbankproject.commons.model.enums.DynamicChangeRequestTargetType.Value,
+                                    operation: com.openbankproject.commons.model.enums.DynamicChangeRequestOperation.Value,
+                                    targetId: Option[String], appliedStatus: Int, cc: CallContext)(apply: => Future[A]): Future[(Any, Int)] =
+      Future(MakerChecker.intercept(targetType, operation, targetId, cc))
+        .map(unboxFullOrFail(_, Some(cc), DynamicChangeRequestApprovalRequired, 400))
+        .flatMap {
+          case Some(changeRequest) => Future.successful((createDynamicChangeRequestJsonV700(changeRequest), 202))
+          case None => apply.map(result => (result, appliedStatus))
+        }
+
+    private def createDynamicResourceDocImpl(bankId: Option[String], rawBody: String, cc: CallContext): Future[(Any, Int)] = {
       for {
         _ <- code.util.Helper.booleanToFuture(DynamicCodeExecutionDisabled, cc = Some(cc)) { DynamicUtil.dynamicCodeExecutionEnabled }
         body <- NewStyle.function.tryons(
@@ -9444,11 +9468,13 @@ object Http4s400 {
         _ <- code.util.Helper.booleanToFuture(
           s"$DynamicResourceDocAlreadyExists The combination of request_url(${body.requestUrl}) and request_verb(${body.requestVerb}) must be unique",
           cc = callContext) { !isExists }
-        (created, _) <- NewStyle.function.createJsonDynamicResourceDoc(bankId, body, callContext)
-      } yield created
+        result <- interceptOrApply(DYNAMIC_RESOURCE_DOC, ChangeOp.CREATE, None, 201, cc) {
+          NewStyle.function.createJsonDynamicResourceDoc(bankId, body, callContext).map(_._1)
+        }
+      } yield result
     }
 
-    private def updateDynamicResourceDocImpl(bankId: Option[String], dynamicResourceDocId: String, rawBody: String, cc: CallContext): Future[JsonDynamicResourceDoc] = {
+    private def updateDynamicResourceDocImpl(bankId: Option[String], dynamicResourceDocId: String, rawBody: String, cc: CallContext): Future[(Any, Int)] = {
       for {
         _ <- code.util.Helper.booleanToFuture(DynamicCodeExecutionDisabled, cc = Some(cc)) { DynamicUtil.dynamicCodeExecutionEnabled }
         body <- NewStyle.function.tryons(
@@ -9459,14 +9485,25 @@ object Http4s400 {
         _ <- validateDynamicResourceDocBody(body, cc)
         _ = compileDynamicResourceDoc(body, cc)
         (_, callContext) <- NewStyle.function.getJsonDynamicResourceDocById(bankId, dynamicResourceDocId, Some(cc))
-        (updated, _) <- NewStyle.function.updateJsonDynamicResourceDoc(
-          bankId, body.copy(dynamicResourceDocId = Some(dynamicResourceDocId)), callContext)
-      } yield updated
+        result <- interceptOrApply(DYNAMIC_RESOURCE_DOC, ChangeOp.UPDATE, Some(dynamicResourceDocId), 200, cc) {
+          NewStyle.function.updateJsonDynamicResourceDoc(
+            bankId, body.copy(dynamicResourceDocId = Some(dynamicResourceDocId)), callContext).map(_._1)
+        }
+      } yield result
+    }
+
+    private def deleteDynamicResourceDocImpl(bankId: Option[String], dynamicResourceDocId: String, cc: CallContext): Future[(Any, Int)] = {
+      for {
+        (_, callContext) <- NewStyle.function.getJsonDynamicResourceDocById(bankId, dynamicResourceDocId, Some(cc))
+        result <- interceptOrApply(DYNAMIC_RESOURCE_DOC, ChangeOp.DELETE, Some(dynamicResourceDocId), 204, cc) {
+          NewStyle.function.deleteJsonDynamicResourceDocById(bankId, dynamicResourceDocId, callContext).map(_._1)
+        }
+      } yield result
     }
 
     lazy val createDynamicResourceDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ POST -> `prefixPath` / "management" / "dynamic-resource-docs" =>
-        EndpointHelpers.executeFutureCreated(req) {
+        EndpointHelpers.executeFutureWithStatus(req) {
           val cc = req.callContext
           createDynamicResourceDocImpl(None, cc.httpBody.getOrElse(""), cc)
         }
@@ -9474,18 +9511,16 @@ object Http4s400 {
 
     lazy val updateDynamicResourceDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ PUT -> `prefixPath` / "management" / "dynamic-resource-docs" / dynamicResourceDocId =>
-        EndpointHelpers.executeAndRespond(req) { cc =>
+        EndpointHelpers.executeFutureWithStatus(req) {
+          val cc = req.callContext
           updateDynamicResourceDocImpl(None, dynamicResourceDocId, cc.httpBody.getOrElse(""), cc)
         }
     }
 
     lazy val deleteDynamicResourceDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ DELETE -> `prefixPath` / "management" / "dynamic-resource-docs" / dynamicResourceDocId =>
-        EndpointHelpers.withUserDelete(req) { (_, cc) =>
-          for {
-            (_, callContext) <- NewStyle.function.getJsonDynamicResourceDocById(None, dynamicResourceDocId, Some(cc))
-            (deleted, _) <- NewStyle.function.deleteJsonDynamicResourceDocById(None, dynamicResourceDocId, callContext)
-          } yield deleted
+        EndpointHelpers.withUserAndStatus(req) { (_, cc) =>
+          deleteDynamicResourceDocImpl(None, dynamicResourceDocId, cc)
         }
     }
 
@@ -9509,7 +9544,7 @@ object Http4s400 {
 
     lazy val createBankLevelDynamicResourceDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ POST -> `prefixPath` / "management" / "banks" / bankIdStr / "dynamic-resource-docs" =>
-        EndpointHelpers.executeFutureCreated(req) {
+        EndpointHelpers.executeFutureWithStatus(req) {
           val cc = req.callContext
           createDynamicResourceDocImpl(Some(bankIdStr), cc.httpBody.getOrElse(""), cc)
         }
@@ -9517,18 +9552,16 @@ object Http4s400 {
 
     lazy val updateBankLevelDynamicResourceDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ PUT -> `prefixPath` / "management" / "banks" / bankIdStr / "dynamic-resource-docs" / dynamicResourceDocId =>
-        EndpointHelpers.executeAndRespond(req) { cc =>
+        EndpointHelpers.executeFutureWithStatus(req) {
+          val cc = req.callContext
           updateDynamicResourceDocImpl(Some(bankIdStr), dynamicResourceDocId, cc.httpBody.getOrElse(""), cc)
         }
     }
 
     lazy val deleteBankLevelDynamicResourceDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ DELETE -> `prefixPath` / "management" / "banks" / bankIdStr / "dynamic-resource-docs" / dynamicResourceDocId =>
-        EndpointHelpers.withUserDelete(req) { (_, cc) =>
-          for {
-            (_, callContext) <- NewStyle.function.getJsonDynamicResourceDocById(Some(bankIdStr), dynamicResourceDocId, Some(cc))
-            (deleted, _) <- NewStyle.function.deleteJsonDynamicResourceDocById(Some(bankIdStr), dynamicResourceDocId, callContext)
-          } yield deleted
+        EndpointHelpers.withUserAndStatus(req) { (_, cc) =>
+          deleteDynamicResourceDocImpl(Some(bankIdStr), dynamicResourceDocId, cc)
         }
     }
 
@@ -9729,7 +9762,7 @@ object Http4s400 {
     // Batch 17 — Dynamic Message Doc CRUD (system + bank level)
     // ═══════════════════════════════════════════════════════════════════════════
 
-    private def createDynamicMessageDocImpl(bankId: Option[String], rawBody: String, cc: CallContext): Future[JsonDynamicMessageDoc] = {
+    private def createDynamicMessageDocImpl(bankId: Option[String], rawBody: String, cc: CallContext): Future[(Any, Int)] = {
       for {
         _ <- code.util.Helper.booleanToFuture(DynamicCodeExecutionDisabled, cc = Some(cc)) { DynamicUtil.dynamicCodeExecutionEnabled }
         body <- NewStyle.function.tryons(
@@ -9748,11 +9781,13 @@ object Http4s400 {
           else ""
         _ <- code.util.Helper.booleanToFuture(errorMsg, cc = callContext) { connectorMethod.isDefined }
         _ = Validation.validateDependency(connectorMethod.orNull)
-        (created, _) <- NewStyle.function.createJsonDynamicMessageDoc(bankId, body, callContext)
-      } yield created
+        result <- interceptOrApply(DYNAMIC_MESSAGE_DOC, ChangeOp.CREATE, None, 201, cc) {
+          NewStyle.function.createJsonDynamicMessageDoc(bankId, body, callContext).map(_._1)
+        }
+      } yield result
     }
 
-    private def updateDynamicMessageDocImpl(bankId: Option[String], dynamicMessageDocId: String, rawBody: String, cc: CallContext): Future[JsonDynamicMessageDoc] = {
+    private def updateDynamicMessageDocImpl(bankId: Option[String], dynamicMessageDocId: String, rawBody: String, cc: CallContext): Future[(Any, Int)] = {
       for {
         _ <- code.util.Helper.booleanToFuture(DynamicCodeExecutionDisabled, cc = Some(cc)) { DynamicUtil.dynamicCodeExecutionEnabled }
         body <- NewStyle.function.tryons(
@@ -9768,14 +9803,25 @@ object Http4s400 {
         _ <- code.util.Helper.booleanToFuture(errorMsg, cc = Some(cc)) { connectorMethod.isDefined }
         _ = Validation.validateDependency(connectorMethod.orNull)
         (_, callContext) <- NewStyle.function.getJsonDynamicMessageDocById(bankId, dynamicMessageDocId, Some(cc))
-        (updated, _) <- NewStyle.function.updateJsonDynamicMessageDoc(
-          bankId, body.copy(dynamicMessageDocId = Some(dynamicMessageDocId)), callContext)
-      } yield updated
+        result <- interceptOrApply(DYNAMIC_MESSAGE_DOC, ChangeOp.UPDATE, Some(dynamicMessageDocId), 200, cc) {
+          NewStyle.function.updateJsonDynamicMessageDoc(
+            bankId, body.copy(dynamicMessageDocId = Some(dynamicMessageDocId)), callContext).map(_._1)
+        }
+      } yield result
+    }
+
+    private def deleteDynamicMessageDocImpl(bankId: Option[String], dynamicMessageDocId: String, cc: CallContext): Future[(Any, Int)] = {
+      for {
+        (_, callContext) <- NewStyle.function.getJsonDynamicMessageDocById(bankId, dynamicMessageDocId, Some(cc))
+        result <- interceptOrApply(DYNAMIC_MESSAGE_DOC, ChangeOp.DELETE, Some(dynamicMessageDocId), 204, cc) {
+          NewStyle.function.deleteJsonDynamicMessageDocById(bankId, dynamicMessageDocId, callContext).map(_._1)
+        }
+      } yield result
     }
 
     lazy val createDynamicMessageDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ POST -> `prefixPath` / "management" / "dynamic-message-docs" =>
-        EndpointHelpers.executeFutureCreated(req) {
+        EndpointHelpers.executeFutureWithStatus(req) {
           val cc = req.callContext
           createDynamicMessageDocImpl(None, cc.httpBody.getOrElse(""), cc)
         }
@@ -9783,18 +9829,16 @@ object Http4s400 {
 
     lazy val updateDynamicMessageDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ PUT -> `prefixPath` / "management" / "dynamic-message-docs" / dynamicMessageDocId =>
-        EndpointHelpers.executeAndRespond(req) { cc =>
+        EndpointHelpers.executeFutureWithStatus(req) {
+          val cc = req.callContext
           updateDynamicMessageDocImpl(None, dynamicMessageDocId, cc.httpBody.getOrElse(""), cc)
         }
     }
 
     lazy val deleteDynamicMessageDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ DELETE -> `prefixPath` / "management" / "dynamic-message-docs" / dynamicMessageDocId =>
-        EndpointHelpers.withUserDelete(req) { (_, cc) =>
-          for {
-            (_, callContext) <- NewStyle.function.getJsonDynamicMessageDocById(None, dynamicMessageDocId, Some(cc))
-            (deleted, _) <- NewStyle.function.deleteJsonDynamicMessageDocById(None, dynamicMessageDocId, callContext)
-          } yield deleted
+        EndpointHelpers.withUserAndStatus(req) { (_, cc) =>
+          deleteDynamicMessageDocImpl(None, dynamicMessageDocId, cc)
         }
     }
 
@@ -9818,7 +9862,7 @@ object Http4s400 {
 
     lazy val createBankLevelDynamicMessageDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ POST -> `prefixPath` / "management" / "banks" / bankIdStr / "dynamic-message-docs" =>
-        EndpointHelpers.executeFutureCreated(req) {
+        EndpointHelpers.executeFutureWithStatus(req) {
           val cc = req.callContext
           createDynamicMessageDocImpl(Some(bankIdStr), cc.httpBody.getOrElse(""), cc)
         }
@@ -9826,18 +9870,16 @@ object Http4s400 {
 
     lazy val updateBankLevelDynamicMessageDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ PUT -> `prefixPath` / "management" / "banks" / bankIdStr / "dynamic-message-docs" / dynamicMessageDocId =>
-        EndpointHelpers.executeAndRespond(req) { cc =>
+        EndpointHelpers.executeFutureWithStatus(req) {
+          val cc = req.callContext
           updateDynamicMessageDocImpl(Some(bankIdStr), dynamicMessageDocId, cc.httpBody.getOrElse(""), cc)
         }
     }
 
     lazy val deleteBankLevelDynamicMessageDoc: HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req @ DELETE -> `prefixPath` / "management" / "banks" / bankIdStr / "dynamic-message-docs" / dynamicMessageDocId =>
-        EndpointHelpers.withUserDelete(req) { (_, cc) =>
-          for {
-            (_, callContext) <- NewStyle.function.getJsonDynamicMessageDocById(Some(bankIdStr), dynamicMessageDocId, Some(cc))
-            (deleted, _) <- NewStyle.function.deleteJsonDynamicMessageDocById(Some(bankIdStr), dynamicMessageDocId, callContext)
-          } yield deleted
+        EndpointHelpers.withUserAndStatus(req) { (_, cc) =>
+          deleteDynamicMessageDocImpl(Some(bankIdStr), dynamicMessageDocId, cc)
         }
     }
 
