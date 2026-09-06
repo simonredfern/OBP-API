@@ -11073,7 +11073,7 @@ trait APIMethods600
 //        InvalidSignalChannelName,
 //        UnknownError
 //      ),
-//      List(apiTagAiAgent, apiTagSignal, apiTagSignalling, apiTagChannel))
+//      List(apiTagAiAgent, apiTagSignalChannel))
 //
 //    lazy val publishSignalMessage: OBPEndpoint = {
 //      case "signal" :: "channels" :: channelName :: "messages" :: Nil JsonPost json -> _ =>
@@ -11152,7 +11152,7 @@ trait APIMethods600
 //        InvalidSignalChannelName,
 //        UnknownError
 //      ),
-//      List(apiTagAiAgent, apiTagSignal, apiTagSignalling, apiTagChannel))
+//      List(apiTagAiAgent, apiTagSignalChannel))
 //
 //    lazy val getSignalMessages: OBPEndpoint = {
 //      case "signal" :: "channels" :: channelName :: "messages" :: Nil JsonGet _ =>
@@ -11214,7 +11214,7 @@ trait APIMethods600
 //        $AuthenticatedUserIsRequired,
 //        UnknownError
 //      ),
-//      List(apiTagAiAgent, apiTagSignal, apiTagSignalling, apiTagChannel))
+//      List(apiTagAiAgent, apiTagSignalChannel))
 //
 //    lazy val getSignalChannels: OBPEndpoint = {
 //      case "signal" :: "channels" :: Nil JsonGet _ =>
@@ -11279,7 +11279,7 @@ trait APIMethods600
 //        InvalidSignalChannelName,
 //        UnknownError
 //      ),
-//      List(apiTagAiAgent, apiTagSignal, apiTagSignalling, apiTagChannel))
+//      List(apiTagAiAgent, apiTagSignalChannel))
 //
 //    lazy val getSignalChannelInfo: OBPEndpoint = {
 //      case "signal" :: "channels" :: channelName :: "info" :: Nil JsonGet _ =>
@@ -11330,7 +11330,7 @@ trait APIMethods600
 //        InvalidSignalChannelName,
 //        UnknownError
 //      ),
-//      List(apiTagAiAgent, apiTagSignal, apiTagSignalling, apiTagChannel))
+//      List(apiTagAiAgent, apiTagSignalChannel))
 //
 //    staticResourceDocs += ResourceDoc(
 //      getSignalStats,
@@ -11354,7 +11354,7 @@ trait APIMethods600
 //        UserHasMissingRoles,
 //        UnknownError
 //      ),
-//      List(apiTagAiAgent, apiTagSignal, apiTagSignalling, apiTagChannel),
+//      List(apiTagAiAgent, apiTagSignalChannel),
 //      Some(List(canGetSignalStats)))
 //
 //    lazy val getSignalStats: OBPEndpoint = {

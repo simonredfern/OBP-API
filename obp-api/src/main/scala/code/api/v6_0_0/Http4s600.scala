@@ -10439,7 +10439,7 @@ object Http4s600 {
         EmptyBody,
         signalChannelsJsonV600,
         List($AuthenticatedUserIsRequired, UnknownError),
-        apiTagAiAgent :: apiTagSignal :: apiTagSignalling :: apiTagChannel :: Nil,
+        apiTagAiAgent :: apiTagSignalChannel :: Nil,
         None,
         http4sPartialFunction = Some(getSignalChannels)
       )
@@ -10460,7 +10460,7 @@ object Http4s600 {
         EmptyBody,
         signalChannelInfoJsonV600,
         List($AuthenticatedUserIsRequired, InvalidSignalChannelName, UnknownError),
-        apiTagAiAgent :: apiTagSignal :: apiTagSignalling :: apiTagChannel :: Nil,
+        apiTagAiAgent :: apiTagSignalChannel :: Nil,
         None,
         http4sPartialFunction = Some(getSignalChannelInfo)
       )
@@ -10481,7 +10481,7 @@ object Http4s600 {
         EmptyBody,
         signalStatsJsonV600,
         List($AuthenticatedUserIsRequired, UserHasMissingRoles, UnknownError),
-        apiTagAiAgent :: apiTagSignal :: apiTagSignalling :: apiTagChannel :: Nil,
+        apiTagAiAgent :: apiTagSignalChannel :: Nil,
         Some(canGetSignalStats :: Nil),
         http4sPartialFunction = Some(getSignalStats)
       )
@@ -10532,7 +10532,7 @@ object Http4s600 {
           SignalMessageContainsDangerousCharacters,
           UnknownError
         ),
-        apiTagAiAgent :: apiTagSignal :: apiTagSignalling :: apiTagChannel :: Nil,
+        apiTagAiAgent :: apiTagSignalChannel :: Nil,
         None,
         http4sPartialFunction = Some(publishSignalMessage)
       )
@@ -10569,7 +10569,7 @@ object Http4s600 {
         EmptyBody,
         signalMessagesJsonV600,
         List($AuthenticatedUserIsRequired, InvalidSignalChannelName, InvalidNumber, UnknownError),
-        apiTagAiAgent :: apiTagSignal :: apiTagSignalling :: apiTagChannel :: Nil,
+        apiTagAiAgent :: apiTagSignalChannel :: Nil,
         None,
         http4sPartialFunction = Some(getSignalMessages)
       )
@@ -10595,7 +10595,7 @@ object Http4s600 {
         // the CanDeleteSignalChannel role gate was added after the migration —
         // an ungated delete let any authenticated user destroy any channel.
         List($AuthenticatedUserIsRequired, UserHasMissingRoles, InvalidSignalChannelName, UnknownError),
-        apiTagAiAgent :: apiTagSignal :: apiTagSignalling :: apiTagChannel :: Nil,
+        apiTagAiAgent :: apiTagSignalChannel :: Nil,
         Some(canDeleteSignalChannel :: Nil),
         http4sPartialFunction = Some(deleteSignalChannel)
       )
