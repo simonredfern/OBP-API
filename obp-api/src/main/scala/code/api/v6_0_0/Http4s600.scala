@@ -161,8 +161,12 @@ object Http4s600 {
       case req @ GET -> `prefixPath` / "api" / "versions" =>
         EndpointHelpers.executeAndRespond(req) { _ =>
           Future {
+            // ApiVersionUtils.versions, not ApiVersion.allScannedApiVersion: the latter is every
+            // ScannedApiVersion value ever *constructed* (they self-register in their constructor),
+            // so a leftover constant advertises a standard whose code is gone. This list is the OBP
+            // versions plus the live class scan for other standards — what this API actually serves.
             val versions: List[ScannedApiVersionJsonV600] =
-              ApiVersion.allScannedApiVersion.asScala.toList
+              ApiVersionUtils.versions
                 .filter(v => v.urlPrefix.trim.nonEmpty)
                 .map { v =>
                   ScannedApiVersionJsonV600(

@@ -401,7 +401,14 @@ Doctrine (settled 2026-09-01): implicit self → redirect in provider; explicit 
 ## Phase 4 — tests
 
 1. **`AgentDelegationTest`** — extend: `onBehalfOfUserIdOf` for original user / consent user / dangling consent (fails closed) / cache hit after consent later bound (BG case) / consent whose user is itself a consent user → Failure; `attributionOf` for each of the three policies.
-2. **`UserReferenceAttributionPolicyTest`** (frozen-style, like `FrozenClassTest`): iterate `ToSchemify.models`, reflect Mapper fields whose name matches `(?i)userid|createdby|grantedby|holder`, assert every (class, field) is named by at least one `UserReference` in `UserReference.all`, and by more than one only where the references differ by process; assert every `UserReference` names real Mapper fields. New tables and renamed columns fail until sorted.
+2. **`UserReferenceAttributionPolicyTest`** — ✅ **2026-09-11**, `obp-api/src/test/scala/code/users/`, 6 scenarios green (shard 8, the catch-all). Iterates `ToSchemify.models`, reflects Mapper fields matching `(?i)userid|createdby|grantedby|holder`, and asserts: every such column is named by a `UserReference` or listed in `notUserIdColumns`; every `UserReference` names a Mapper that is in the schema; every named field exists; a column named by several references has references that differ by *policy* (the deliberate case is `MappedEntitlement.mUserId` — `EntitlementUser` vs `ConsentEntitlementUser`); no column is both given a policy and excluded; and no `notUserIdColumns` entry is inert.
+
+   **Found on first run — the map was not complete:**
+   - `ApiProductSubscription.CreatedByUserId` and `DynamicGlossaryItem.CreatedByUserId` had no policy at all. Both tables landed after the policy file was written, which is exactly the drift this test exists to catch. Added as `ApiProductSubscriptionCreator` / `DynamicGlossaryItemCreator`, both `UseOnBehalfOfUserId` (consistent with the other `*Creator` references).
+   - `PemUsageLastUser` named `code.api.pemusage.PemUsage`, which is **not in `ToSchemify.models`** — so it has no table. It is an unwired stub: `MappedPemUsageProvider`'s body is empty and nothing outside its own package references it. The policy entry was removed; if PemUsage is ever wired up this test will demand it back. **The dead stub itself was left in place** — deleting a feature skeleton is a separate call.
+   - Four `notUserIdColumns` entries (`AccountAccessRequest.CheckerComment`, `DynamicChangeRequest.CheckerComment`, `MappedKycCheck.mStaffName`, `MappedMeeting.mStaffToken`) excluded columns the pattern never catches, i.e. gave no cover while looking like they did. Removed, reasons kept as a comment.
+
+   **Pattern width was measured, not guessed.** A wider pattern (adding `user|staff|checker|requestor|owner|sender|granted`) surfaces 19 columns, of which 17 are noise (`Username`, `superUser`, `UseRowLevelAccess`, `UserAgreementId`, `userAuthenticationURL`, …) and **zero** are genuine unclaimed user-id columns. The narrow pattern does miss bare `user` / `user_fk` style names, but every such column in the schema is already declared, so there is no live gap. Kept narrow; do not re-litigate without re-measuring.
 3. **`OnBehalfOfOwnershipSweepTest`**: mint a consent for a test human with generous roles; call every `UseOnBehalfOfUserId` create endpoint with the consent JWT; assert no row in any such table references the consent user's id, and at least one references the human. Also assert `Reject` endpoints return 400.
 4. Existing `ConsentObpTest` / `ConsentTest` keep passing (35033 now only AnyBank).
 
@@ -465,8 +472,12 @@ Doctrine (settled 2026-09-01): implicit self → redirect in provider; explicit 
    `getMyCustomersAtBank` (`GET /banks/BANK_ID/my/customers`) and `getMyCustomers` (`GET /my/customers`,
    union over the Banks the Consent names). Older versions are untouched and fail closed, which is the only
    direction in which version-scoping an agent-aware read is safe (Decision 6 of `ai_agent_talk.md`: the
-   version is not a security boundary — a consent user may call v5). Not yet covered by an HTTP-level test
-   with a real consent JWT; the model, the round trip and the validation are covered in `AgentDelegationTest`.
+   version is not a security boundary — a consent user may call v5). Covered by `AgentDelegationTest`
+   (the claim model, the json/claim round trip and the shape validation) and by
+   `code.api.v7_0_0.CustomerConsentUserTest` (6 scenarios on the wire, with a real consent JWT: the granting
+   User reads their own; a Consent granting nothing gets 403 and not an empty list; a Consent naming the Bank
+   reads the granting User's Customers; a grant for another Bank does not open this one; a write-only grant
+   does not grant reading; a malformed entry is refused at consent creation). Shard 6 (`code.api.v7_0_0`).
 
 ## Risks
 

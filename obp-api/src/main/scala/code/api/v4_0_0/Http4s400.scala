@@ -9,6 +9,7 @@ import code.api.ResourceDocs1_4_0.SwaggerDefinitionsJSON._
 import code.api.v3_1_0.ConsentChallengeJsonV310
 import code.consent.ConsentStatus
 import com.openbankproject.commons.model.enums.{AttributeCategory, AttributeType, UserInvitationPurpose}
+import code.api.util.ApiVersionUtils
 import code.api.util.APIUtil.{EmptyBody, ResourceDoc, _}
 import code.api.util.ApiRole._
 import code.api.util.ApiTag._
@@ -3756,8 +3757,10 @@ object Http4s400 {
       case req @ GET -> `prefixPath` / "api" / "versions" =>
         EndpointHelpers.executeAndRespond(req) { _ =>
           Future {
+            // See the v6.0.0 endpoint: the constructor registry advertises retired standards, the
+            // live scan does not.
             val versions: List[ScannedApiVersion] =
-              ApiVersion.allScannedApiVersion.asScala.toList.filter { v =>
+              ApiVersionUtils.versions.filter { v =>
                 v.urlPrefix.trim.nonEmpty && APIUtil.versionIsAllowed(v)
               }
             com.openbankproject.commons.model.ListResult("scanned_api_versions", versions)

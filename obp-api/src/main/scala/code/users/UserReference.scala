@@ -62,7 +62,6 @@ object UserReference {
   case object UserLocksUser                           extends UserReference(KeepUserId         , "code.userlocks.UserLocks", List("UserId"), "lock the authenticated user")
   case object ExpectedChallengeAnswerUser             extends UserReference(KeepUserId         , "code.transactionChallenge.MappedExpectedChallengeAnswer", List("ExpectedUserId"), "the challenge is answered by the initiating user")
   case object ChatMessageSender                       extends UserReference(KeepUserId         , "code.chat.ChatMessage", List("SenderUserId"), "sender = the authenticated user is truthful")
-  case object PemUsageLastUser                        extends UserReference(KeepUserId         , "code.api.pemusage.PemUsage", List("LastUserId"), "audit")
   case object MetricUser                              extends UserReference(KeepUserId         , "code.metrics.MappedMetric", List("userId"), "record both: on-behalf-of via consent_reference_id at read time")
   case object MetricArchiveUser                       extends UserReference(KeepUserId         , "code.metrics.MetricArchive", List("userId"), "as MetricUser")
   case object ConnectorTraceUser                      extends UserReference(KeepUserId         , "code.metrics.ConnectorTrace", List("userId"), "as MetricUser")
@@ -100,6 +99,8 @@ object UserReference {
   case object AbacRuleCreator                         extends UserReference(UseOnBehalfOfUserId, "code.abacrule.AbacRule", List("CreatedByUserId", "UpdatedByUserId"))
   case object CounterpartyCreator                     extends UserReference(UseOnBehalfOfUserId, "code.metadata.counterparties.MappedCounterparty", List("mCreatedByUserId"))
   case object CounterpartyWhereTagUser                extends UserReference(UseOnBehalfOfUserId, "code.metadata.counterparties.MappedCounterpartyWhereTag", List("user"))
+  case object ApiProductSubscriptionCreator           extends UserReference(UseOnBehalfOfUserId, "code.apiproductsubscription.ApiProductSubscription", List("CreatedByUserId"), "a subscription outlives the Consent that took it out")
+  case object DynamicGlossaryItemCreator              extends UserReference(UseOnBehalfOfUserId, "code.glossaryitem.DynamicGlossaryItem", List("CreatedByUserId"))
   case object BankCreator                             extends UserReference(UseOnBehalfOfUserId, "code.model.dataAccess.MappedBank", List("CreatedByUserId"), "creator grant already resolved at the endpoint")
   case object OrganisationCreator                     extends UserReference(UseOnBehalfOfUserId, "code.organisation.Organisation", List("CreatedByUserId"))
   case object PayeeLookupCreator                      extends UserReference(UseOnBehalfOfUserId, "code.payeelookup.PayeeLookup", List("CreatedByUserId"))
@@ -143,7 +144,6 @@ object UserReference {
     UserLocksUser,
     ExpectedChallengeAnswerUser,
     ChatMessageSender,
-    PemUsageLastUser,
     MetricUser,
     MetricArchiveUser,
     ConnectorTraceUser,
@@ -179,6 +179,8 @@ object UserReference {
     AbacRuleCreator,
     CounterpartyCreator,
     CounterpartyWhereTagUser,
+    ApiProductSubscriptionCreator,
+    DynamicGlossaryItemCreator,
     BankCreator,
     OrganisationCreator,
     PayeeLookupCreator,
@@ -213,14 +215,15 @@ object UserReference {
     OAuthTokenUser
   )
 
-  /** Mapper fields the frozen test's name pattern matches but which are not user ids. */
+  /** Mapper fields the frozen test's name pattern matches but which are not user ids.
+   *
+   *  Only columns the pattern actually catches belong here; UserReferenceAttributionPolicyTest fails
+   *  on an entry that matches nothing, because an inert exclusion looks like cover it is not giving.
+   *  (Removed for that reason: AccountAccessRequest.CheckerComment, DynamicChangeRequest.CheckerComment,
+   *  MappedKycCheck.mStaffName, MappedMeeting.mStaffToken -- all free text, and none of them matched.) */
   val notUserIdColumns: List[(String, String, String)] = List(
     ("code.model.dataAccess.MappedBankAccount", "holder", "free-text holder name"),
     ("code.transaction.MappedTransaction", "counterpartyAccountHolder", "free-text name"),
-    ("code.accountaccessrequest.AccountAccessRequest", "CheckerComment", "text"),
-    ("code.dynamicchangerequest.DynamicChangeRequest", "CheckerComment", "text"),
-    ("code.kycchecks.MappedKycCheck", "mStaffName", "text"),
-    ("code.meetings.MappedMeeting", "mStaffToken", "token"),
     ("code.entitlement.MappedEntitlement", "mCreatedByProcess", "process tag"),
     ("code.model.dataAccess.ResourceUser", "userId_", "the user's own id"),
     ("code.model.dataAccess.ResourceUser", "CreatedByConsentId", "consent id"),
