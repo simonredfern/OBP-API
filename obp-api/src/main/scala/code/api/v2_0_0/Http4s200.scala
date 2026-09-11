@@ -1045,7 +1045,15 @@ object Http4s200 {
               CustomerX.customerProvider.vend.checkCustomerNumberAvailable(bank.bankId, body.customer_number)
             }
             userId = if (body.user_id.nonEmpty) body.user_id else user.userId
-            (_, _) <- NewStyle.function.findByUserId(userId, Some(cc))
+            (customerUser, _) <- NewStyle.function.findByUserId(userId, Some(cc))
+            // An explicit user_id must name an original user: a Customer is linked to a human,
+            // and a link on an agent identity dies with its Consent. An omitted user_id means
+            // the caller, which the provider redirects. ON_BEHALF_OF_USER_ID_PLAN.md, Phase 3.
+            _ <- code.util.Helper.booleanToFuture(
+              s"$InvalidUserId user_id names a consent user (an agent identity minted by a Consent). Customers are linked to humans - use the granting user's USER_ID.",
+              failCode = 400, cc = Some(cc)) {
+              body.user_id.isEmpty || !customerUser.isConsentUser
+            }
             customer <- Future {
               CustomerX.customerProvider.vend.addCustomer(
                 bank.bankId, body.customer_number, body.legal_name, body.mobile_phone_number, body.email,
@@ -1080,7 +1088,7 @@ object Http4s200 {
       |""",
       createCustomerJson, customerJsonV140,
       List(InvalidBankIdFormat, AuthenticatedUserIsRequired, BankNotFound, CustomerNumberAlreadyExists,
-        UserHasMissingRoles, UserNotFoundById, CreateConsumerError, CustomerAlreadyExistsForUser,
+        UserHasMissingRoles, UserNotFoundById, InvalidUserId, CreateConsumerError, CustomerAlreadyExistsForUser,
         CreateUserCustomerLinksError, UnknownError),
       List(apiTagCustomer, apiTagPerson, apiTagOldStyle),
       Some(List(canCreateCustomer, canCreateUserCustomerLink)),
@@ -1152,6 +1160,13 @@ object Http4s200 {
             targetUser <- Users.users.vend.getUserByUserIdFuture(body.user_id) map {
               x => unboxFullOrFail(x, Some(cc), UserNotFoundByUserId, 404)
             }
+            // The link target is explicit here, so it must name an original user: a link on an
+            // agent identity dies with its Consent. ON_BEHALF_OF_USER_ID_PLAN.md, Phase 3.
+            _ <- code.util.Helper.booleanToFuture(
+              s"$InvalidUserId user_id names a consent user (an agent identity minted by a Consent). Customers are linked to humans - use the granting user's USER_ID.",
+              failCode = 400, cc = Some(cc)) {
+              !targetUser.isConsentUser
+            }
             (customer, cc2) <- NewStyle.function.getCustomerByCustomerId(body.customer_id, Some(cc))
             _ <- code.util.Helper.booleanToFuture(
               s"Bank of the customer specified by the CUSTOMER_ID(${customer.bankId}) has to matches BANK_ID(${bank.bankId.value}) in URL",
@@ -1183,7 +1198,7 @@ object Http4s200 {
       |""",
       createUserCustomerLinkJson, userCustomerLinkJson,
       List(AuthenticatedUserIsRequired, InvalidBankIdFormat, BankNotFound, InvalidJsonFormat,
-        CustomerNotFoundByCustomerId, UserHasMissingRoles, CustomerAlreadyExistsForUser,
+        InvalidUserId, CustomerNotFoundByCustomerId, UserHasMissingRoles, CustomerAlreadyExistsForUser,
         CreateUserCustomerLinksError, UnknownError),
       List(apiTagCustomer, apiTagUser, apiTagOldStyle),
       Some(List(canCreateUserCustomerLink, canCreateUserCustomerLinkAtAnyBank)),

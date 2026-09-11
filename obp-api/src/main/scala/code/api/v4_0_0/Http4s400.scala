@@ -1440,8 +1440,15 @@ object Http4s400 {
             _ <- NewStyle.function.tryons(InvalidBankIdFormat, 400, Some(cc)) {
               assert(isValidID(bank.bankId.value))
             }
-            _ <- Users.users.vend.getUserByUserIdFuture(postedData.user_id) map { x =>
+            targetUser <- Users.users.vend.getUserByUserIdFuture(postedData.user_id) map { x =>
               unboxFullOrFail(x, Some(cc), UserNotFoundByUserId, 404)
+            }
+            // The link target is explicit here, so it must name an original user: a link on an
+            // agent identity dies with its Consent. ON_BEHALF_OF_USER_ID_PLAN.md, Phase 3.
+            _ <- code.util.Helper.booleanToFuture(
+              s"$InvalidUserId user_id names a consent user (an agent identity minted by a Consent). Customers are linked to humans - use the granting user's USER_ID.",
+              failCode = 400, cc = Some(cc)) {
+              !targetUser.isConsentUser
             }
             _ <- code.util.Helper.booleanToFuture(
               "Field customer_id is not defined in the posted json!",
@@ -1479,6 +1486,7 @@ object Http4s400 {
         InvalidBankIdFormat,
         $BankNotFound,
         InvalidJsonFormat,
+        InvalidUserId,
         CustomerNotFoundByCustomerId,
         UserHasMissingRoles,
         CustomerAlreadyExistsForUser,

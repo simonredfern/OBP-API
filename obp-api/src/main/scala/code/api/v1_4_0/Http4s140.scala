@@ -396,7 +396,15 @@ object Http4s140 {
               CustomerX.customerProvider.vend.checkCustomerNumberAvailable(bank.bankId, body.customer_number)
             }
             userId = if (body.user_id.nonEmpty) body.user_id else user.userId
-            (_, _) <- NewStyle.function.findByUserId(userId, Some(cc))
+            (customerUser, _) <- NewStyle.function.findByUserId(userId, Some(cc))
+            // An explicit user_id must name an original user: a Customer is linked to a human,
+            // and a link on an agent identity dies with its Consent. An omitted user_id means
+            // the caller, which the provider redirects. ON_BEHALF_OF_USER_ID_PLAN.md, Phase 3.
+            _ <- code.util.Helper.booleanToFuture(
+              s"$InvalidUserId user_id names a consent user (an agent identity minted by a Consent). Customers are linked to humans - use the granting user's USER_ID.",
+              failCode = 400, cc = Some(cc)) {
+              body.user_id.isEmpty || !customerUser.isConsentUser
+            }
             customer <- Future {
               CustomerX.customerProvider.vend.addCustomer(
                 bankId                   = bank.bankId,
@@ -453,6 +461,7 @@ object Http4s140 {
         CustomerNumberAlreadyExists,
         "Problem getting user_id",
         UserNotFoundById,
+        InvalidUserId,
         "Could not create customer",
         "Could not create user_customer_links",
         UnknownError),

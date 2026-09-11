@@ -758,6 +758,110 @@ object DynamicEntityHelper {
       )
     }
 
+    // Row-level access (useRowLevelAccess): the per-record ACL management endpoints. Documented only
+    // for entities that opt in, mirroring the public/community blocks above. The keys carry an
+    // `Access` prefix so they never collide with the data endpoints' docs (which the handlers look up).
+    if(dynamicEntityInfo.useRowLevelAccess) {
+      val accessSplitNameWithBankId = s"Access$splitNameWithBankId"
+      val accessResourceDocUrl = s"$resourceDocUrl/$idNameInUrl/access"
+      val accessEntryExample: JObject =
+        ("user_id" -> ExampleValue.userIdExample.value) ~
+        ("can_read" -> true) ~
+        ("can_update" -> true) ~
+        ("can_delete" -> false) ~
+        ("can_grant" -> true)
+      val accessGrantedByExample: JObject = ("granted_by" -> ExampleValue.userIdExample.value)
+      val accessListExample: JObject =
+        ("access" -> JArray(List(accessEntryExample merge accessGrantedByExample)))
+      val accessRoleNote =
+        s"""This endpoint exists because $splitName is defined with `useRowLevelAccess`: a per-record access list decides
+           |read, update, delete and grant in place of the entity's Get, Update and Delete roles.
+           |
+           |The caller must hold `can_grant` on this record — the User who created it does — or the
+           |`${dynamicEntityInfo.canGrantRowAccessRole.toString()}` role, which administers the access list of any record.
+           |""".stripMargin
+
+      resourceDocs += (DynamicEntityOperation.GET_ALL, accessSplitNameWithBankId) -> ResourceDoc(
+        implementedInApiVersion,
+        buildGetRowAccessFunctionName(bankId, entityName),
+        "GET",
+        s"$accessResourceDocUrl",
+        s"Get $splitName Record Access List",
+        s"""Get the access list of one $splitName record.
+           |
+           |$accessRoleNote
+           |
+           |${userAuthenticationMessage(true)}
+           |""".stripMargin,
+        EmptyBody,
+        accessListExample,
+        List(
+          AuthenticatedUserIsRequired,
+          UserHasMissingRoles,
+          UnknownError
+        ),
+        List(apiTag, apiTagDynamicEntity, apiTagDynamic),
+        Some(List(dynamicEntityInfo.canGrantRowAccessRole)),
+        createdByBankId= dynamicEntityInfo.bankId
+      )
+
+      resourceDocs += (DynamicEntityOperation.UPDATE, accessSplitNameWithBankId) -> ResourceDoc(
+        implementedInApiVersion,
+        buildGrantRowAccessFunctionName(bankId, entityName),
+        "POST",
+        s"$accessResourceDocUrl",
+        s"Grant Access to a $splitName Record",
+        s"""Grant (or update) another User's access to one $splitName record.
+           |
+           |The body is one entry or an array of entries. `user_id` is required; `can_read`, `can_update` and
+           |`can_delete` default to `false` and `can_grant` defaults to `true`, so a grantee may re-share by default.
+           |Sending an entry for a User who already holds access replaces their permissions.
+           |
+           |$accessRoleNote
+           |
+           |${userAuthenticationMessage(true)}
+           |""".stripMargin,
+        accessEntryExample,
+        accessListExample,
+        List(
+          AuthenticatedUserIsRequired,
+          UserHasMissingRoles,
+          InvalidJsonFormat,
+          UnknownError
+        ),
+        List(apiTag, apiTagDynamicEntity, apiTagDynamic),
+        Some(List(dynamicEntityInfo.canGrantRowAccessRole)),
+        createdByBankId= dynamicEntityInfo.bankId
+      )
+
+      resourceDocs += (DynamicEntityOperation.DELETE, accessSplitNameWithBankId) -> ResourceDoc(
+        implementedInApiVersion,
+        buildRevokeRowAccessFunctionName(bankId, entityName),
+        "DELETE",
+        s"$accessResourceDocUrl/USER_ID",
+        s"Revoke Access to a $splitName Record",
+        s"""Revoke one User's access to one $splitName record.
+           |
+           |The revoke cascades: every grant that User made on this record, and every grant made in turn by
+           |those grantees, is removed with it.
+           |
+           |$accessRoleNote
+           |
+           |${userAuthenticationMessage(true)}
+           |""".stripMargin,
+        EmptyBody,
+        accessListExample,
+        List(
+          AuthenticatedUserIsRequired,
+          UserHasMissingRoles,
+          UnknownError
+        ),
+        List(apiTag, apiTagDynamicEntity, apiTagDynamic),
+        Some(List(dynamicEntityInfo.canGrantRowAccessRole)),
+        createdByBankId= dynamicEntityInfo.bankId
+      )
+    }
+
     resourceDocs
   }
 
@@ -767,6 +871,9 @@ object DynamicEntityHelper {
   private def buildDeleteFunctionName(bankId:Option[String], entityName: String) = s"dynamicEntity_delete${entityName}_${bankId.getOrElse("")}"
   private def buildGetOneFunctionName(bankId:Option[String], entityName: String) = s"dynamicEntity_getSingle${entityName}_${bankId.getOrElse("")}"
   private def buildGetAllFunctionName(bankId:Option[String], entityName: String) = s"dynamicEntity_get${entityName}List_${bankId.getOrElse("")}"
+  private def buildGetRowAccessFunctionName(bankId:Option[String], entityName: String) = s"dynamicEntity_get${entityName}RowAccess_${bankId.getOrElse("")}"
+  private def buildGrantRowAccessFunctionName(bankId:Option[String], entityName: String) = s"dynamicEntity_grant${entityName}RowAccess_${bankId.getOrElse("")}"
+  private def buildRevokeRowAccessFunctionName(bankId:Option[String], entityName: String) = s"dynamicEntity_revoke${entityName}RowAccess_${bankId.getOrElse("")}"
 
   @inline
   private def buildOperationId(bankId:Option[String], entityName: String, fun: (Option[String], String) => String): String = {

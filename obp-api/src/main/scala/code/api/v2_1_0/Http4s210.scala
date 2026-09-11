@@ -1058,6 +1058,14 @@ object Http4s210 {
             }
             userId = if (body.user_id.nonEmpty) body.user_id else user.userId
             (customerUser, _) <- NewStyle.function.findByUserId(userId, Some(cc))
+            // An explicit user_id must name an original user: a Customer is linked to a human,
+            // and a link on an agent identity dies with its Consent. An omitted user_id means
+            // the caller, which the provider redirects. ON_BEHALF_OF_USER_ID_PLAN.md, Phase 3.
+            _ <- code.util.Helper.booleanToFuture(
+              s"$InvalidUserId user_id names a consent user (an agent identity minted by a Consent). Customers are linked to humans - use the granting user's USER_ID.",
+              failCode = 400, cc = Some(cc)) {
+              body.user_id.isEmpty || !customerUser.isConsentUser
+            }
             customer <- Future {
               CustomerX.customerProvider.vend.addCustomer(
                 bank.bankId, body.customer_number, body.legal_name, body.mobile_phone_number, body.email,
@@ -1095,7 +1103,7 @@ object Http4s210 {
       |""",
       postCustomerJsonV210, customerJsonV210,
       List(AuthenticatedUserIsRequired, BankNotFound, InvalidJsonFormat, CustomerNumberAlreadyExists,
-        UserNotFoundById, CustomerAlreadyExistsForUser, CreateConsumerError, UnknownError),
+        UserNotFoundById, InvalidUserId, CustomerAlreadyExistsForUser, CreateConsumerError, UnknownError),
       List(apiTagCustomer, apiTagPerson, apiTagOldStyle),
       None,
       http4sPartialFunction = Some(createCustomer))

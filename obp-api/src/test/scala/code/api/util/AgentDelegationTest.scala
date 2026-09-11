@@ -2,12 +2,13 @@ package code.api.util
 
 import code.accountholders.AccountHolders
 import code.api.util.APIUtil.generateUUID
+import code.api.util.{Consent, ConsentLinkedCustomers, ConsentMyResources}
 import code.consent.MappedConsent
 import code.model.dataAccess.ResourceUser
 import code.setup.ServerSetup
 import code.users.{AttributionPolicy, UserReference, Users}
 import com.openbankproject.commons.model.{AccountId, BankId, BankIdAccountId}
-import net.liftweb.common.{Failure, Full}
+import net.liftweb.common.{Box, Failure, Full}
 import org.json4s.JObject
 import org.json4s.JsonDSL._
 import org.scalatest.Tag
@@ -314,6 +315,131 @@ class AgentDelegationTest extends ServerSetup {
       val created = provider.createOrUpdate(code.dynamicEntity.DynamicEntityCommons(definition, None, agent.userId, None)).openOrThrowException("expected the definition")
       try created.userId shouldBe human.userId
       finally provider.delete(created)
+    }
+  }
+
+  feature("User-Customer links go through the attribution policy (UserCustomerLinkUser)") {
+
+    def links = code.usercustomerlinks.UserCustomerLink.userCustomerLink.vend
+
+    scenario("a link created by a consent user belongs to its on-behalf-of user", AgentDelegationTag) {
+      val human = createUser()
+      val consent = MappedConsent.create.mUserId(human.userId).saveMe()
+      val agent = createUser(createdByConsentId = Some(consent.consentId))
+      val customerId = generateUUID()
+      val link = links.createUserCustomerLink(agent.userId, customerId, new java.util.Date(), true)
+        .openOrThrowException("expected the link row")
+      link.userId shouldBe human.userId
+      links.getUserCustomerLinksByUserId(human.userId).map(_.customerId) should contain(customerId)
+      links.getUserCustomerLinksByUserId(agent.userId).map(_.customerId) should not contain customerId
+    }
+
+    scenario("a link created by an original user stays on that user", AgentDelegationTag) {
+      val human = createUser()
+      val customerId = generateUUID()
+      val link = links.createUserCustomerLink(human.userId, customerId, new java.util.Date(), true)
+        .openOrThrowException("expected the link row")
+      link.userId shouldBe human.userId
+    }
+
+    scenario("a consent user whose consent has no human yet keeps the row on itself (fails closed)", AgentDelegationTag) {
+      val consent = MappedConsent.create.mUserId("").saveMe()
+      val agent = createUser(createdByConsentId = Some(consent.consentId))
+      val customerId = generateUUID()
+      val link = links.createUserCustomerLink(agent.userId, customerId, new java.util.Date(), true)
+        .openOrThrowException("expected the link row")
+      link.userId shouldBe agent.userId
+    }
+
+    // The two-argument lookup is every caller's "already linked?" pre-check, and
+    // MappedUserCustomerLink has UniqueIndex(mUserId, mCustomerId). If the create resolved but
+    // the lookup did not, the check would pass on the agent and then break the index on the human.
+    scenario("the pre-check lookup asks about the row the create would write", AgentDelegationTag) {
+      val human = createUser()
+      val consent = MappedConsent.create.mUserId(human.userId).saveMe()
+      val agent = createUser(createdByConsentId = Some(consent.consentId))
+      val customerId = generateUUID()
+      links.createUserCustomerLink(human.userId, customerId, new java.util.Date(), true)
+        .openOrThrowException("expected the human's link row")
+
+      links.getUserCustomerLink(agent.userId, customerId).map(_.userId) shouldBe Full(human.userId)
+      val again = links.getOCreateUserCustomerLink(agent.userId, customerId, new java.util.Date(), true)
+        .openOrThrowException("expected the existing row, not a second one")
+      again.userId shouldBe human.userId
+      links.getUserCustomerLinksByUserId(human.userId).count(_.customerId == customerId) shouldBe 1
+    }
+
+    // Deliberate asymmetry: this method also serves the admin lookup at
+    // GET /banks/BANK_ID/user_customer_links/users/USER_ID, where the id is an explicit target.
+    scenario("listing by user id is not redirected, so an explicit target still answers for itself", AgentDelegationTag) {
+      val human = createUser()
+      val consent = MappedConsent.create.mUserId(human.userId).saveMe()
+      val agent = createUser(createdByConsentId = Some(consent.consentId))
+      val customerId = generateUUID()
+      links.createUserCustomerLink(agent.userId, customerId, new java.util.Date(), true)
+        .openOrThrowException("expected the link row")
+      links.getUserCustomerLinksByUserId(agent.userId) shouldBe empty
+    }
+  }
+
+  feature("my_resources.linked_customers — the Consent grant a consent user needs to read its human's Customers") {
+
+    import code.api.v6_0_0.{PostConsentLinkedCustomersJson, PostConsentMyResourcesJson}
+
+    def validate(body: PostConsentMyResourcesJson): Box[Unit] =
+      scala.concurrent.Await.result(Consent.validateMyResources(Some(body), None), scala.concurrent.duration.Duration(10, "seconds"))
+
+    // booleanToFuture reports a bad body by throwing (fullBoxOrException), so a rejection is an
+    // exception carrying the message the caller will see -- assert on that, not on a Failure box.
+    def rejectionMessage(body: PostConsentMyResourcesJson): String =
+      intercept[Exception](validate(body)).getMessage
+
+    scenario("a grant covers exactly the bank it names, and nothing else", AgentDelegationTag) {
+      val claim = ConsentMyResources(Nil, List(ConsentLinkedCustomers("bank-a", List(ConsentMyResources.actionRead))))
+      claim.coversLinkedCustomers("bank-a", ConsentMyResources.actionRead) shouldBe true
+      claim.coversLinkedCustomers("bank-b", ConsentMyResources.actionRead) shouldBe false
+      claim.coversLinkedCustomers("bank-a", ConsentMyResources.actionWrite) shouldBe false
+    }
+
+    scenario("a consent with no linked_customers covers nothing", AgentDelegationTag) {
+      ConsentMyResources(Nil).coversLinkedCustomers("bank-a", ConsentMyResources.actionRead) shouldBe false
+      ConsentMyResources(Nil).linkedCustomerBankIds(ConsentMyResources.actionRead) shouldBe Nil
+    }
+
+    scenario("the unscoped read sees only the banks granted for that action", AgentDelegationTag) {
+      val claim = ConsentMyResources(Nil, List(
+        ConsentLinkedCustomers("bank-a", List(ConsentMyResources.actionRead)),
+        ConsentLinkedCustomers("bank-b", List(ConsentMyResources.actionWrite))))
+      claim.linkedCustomerBankIds(ConsentMyResources.actionRead) shouldBe List("bank-a")
+      claim.linkedCustomerBankIds(ConsentMyResources.actionWrite) shouldBe List("bank-b")
+    }
+
+    // The claim travels in the consent JWT, so a lossy round trip silently drops a grant.
+    scenario("linked_customers survives the json to claim round trip", AgentDelegationTag) {
+      val body = PostConsentMyResourcesJson(None, Some(List(
+        PostConsentLinkedCustomersJson("bank-a", List(ConsentMyResources.actionRead)))))
+      val claim = ConsentMyResources.fromJson(body)
+      claim.linked_customers shouldBe List(ConsentLinkedCustomers("bank-a", List(ConsentMyResources.actionRead)))
+      ConsentMyResources.toJson(claim).linked_customers shouldBe body.linked_customers
+    }
+
+    scenario("a well formed linked_customers entry validates", AgentDelegationTag) {
+      validate(PostConsentMyResourcesJson(None, Some(List(
+        PostConsentLinkedCustomersJson("bank-a", List(ConsentMyResources.actionRead)))))).isDefined shouldBe true
+    }
+
+    scenario("bank_id is required, because a Customer belongs to a Bank", AgentDelegationTag) {
+      val message = rejectionMessage(PostConsentMyResourcesJson(None, Some(List(
+        PostConsentLinkedCustomersJson("", List(ConsentMyResources.actionRead))))))
+      message should include(ErrorMessages.ConsentMyResourcesInvalid.trim)
+      message should include("bank_id is required")
+    }
+
+    scenario("actions must be named and known", AgentDelegationTag) {
+      rejectionMessage(PostConsentMyResourcesJson(None, Some(List(
+        PostConsentLinkedCustomersJson("bank-a", Nil))))) should include("actions must name at least one of")
+      rejectionMessage(PostConsentMyResourcesJson(None, Some(List(
+        PostConsentLinkedCustomersJson("bank-a", List("delete")))))) should include("unknown actions delete")
     }
   }
 }

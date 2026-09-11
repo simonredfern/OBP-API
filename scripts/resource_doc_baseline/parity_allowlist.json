@@ -1314,6 +1314,46 @@
       "reason": "Same rate-limiting doc expansion as the other call-limit endpoints.",
       "lift_digest": "b4a18cf966d2dbdd3760c86771869b584cd10286dac49620d075a7cbfdca4996",
       "http4s_digest": "229b587b60d0eec166b7f962703514c81e5d176ee65dd70de0c131efc221bd8c"
+    },
+    {
+      "version": "v1_4_0",
+      "endpoint": "addCustomer",
+      "field": "errorResponseBodies",
+      "reason": "Phase 3 on-behalf-of guard: an explicit user_id naming a consent user is refused with 400 InvalidUserId, so the error list gains InvalidUserId. See ON_BEHALF_OF_USER_ID_PLAN.md.",
+      "lift_digest": "72059bd5869c989ac1938f0fea5f0786be4b62838f2e655d63143b9db5c93128",
+      "http4s_digest": "9aee037dd06754a8d6c32b3adae1e6ea1e6f931c3dce43c4cfddada2871b8670"
+    },
+    {
+      "version": "v2_0_0",
+      "endpoint": "createCustomer",
+      "field": "errorResponseBodies",
+      "reason": "Phase 3 on-behalf-of guard: an explicit user_id naming a consent user is refused with 400 InvalidUserId, so the error list gains InvalidUserId. See ON_BEHALF_OF_USER_ID_PLAN.md.",
+      "lift_digest": "33c5b895d707447b256bd25741116c561dd656130715153950cb5ca81a80d667",
+      "http4s_digest": "31e6e04059b80406f66eac9f597fc94d78f6ce526309eb5e661824aa471e6e18"
+    },
+    {
+      "version": "v2_0_0",
+      "endpoint": "createUserCustomerLinks",
+      "field": "errorResponseBodies",
+      "reason": "Phase 3 on-behalf-of guard: an explicit user_id naming a consent user is refused with 400 InvalidUserId, so the error list gains InvalidUserId. See ON_BEHALF_OF_USER_ID_PLAN.md.",
+      "lift_digest": "ed173d824d2b639bd21d940e7c846183ce6ee629e842fd5e0580e9a9ca2836ef",
+      "http4s_digest": "c223322e602a5021ec8bf87ca939fc313f6349f7b9e56938da812580bb4175f2"
+    },
+    {
+      "version": "v2_1_0",
+      "endpoint": "createCustomer",
+      "field": "errorResponseBodies",
+      "reason": "Phase 3 on-behalf-of guard: an explicit user_id naming a consent user is refused with 400 InvalidUserId, so the error list gains InvalidUserId. See ON_BEHALF_OF_USER_ID_PLAN.md.",
+      "lift_digest": "07b620b7cc671aa6e30bd44d00a53e33cce60f103d9df4eaa97a627adf2c67a3",
+      "http4s_digest": "79776bfa4a20aacc5bc855837260797e17aa7b468b4f4ced2487ba83b6ac2bb8"
+    },
+    {
+      "version": "v4_0_0",
+      "endpoint": "createUserCustomerLinks",
+      "field": "errorResponseBodies",
+      "reason": "Phase 3 on-behalf-of guard: an explicit user_id naming a consent user is refused with 400 InvalidUserId, so the error list gains InvalidUserId. See ON_BEHALF_OF_USER_ID_PLAN.md.",
+      "lift_digest": "a7430ecc6a099fbc3fcce88309042b333cda459753ad645191e62414be7091de",
+      "http4s_digest": "1636809d333bb3c72cf56c005f212f15dbd5d3491ed89584e70ba9c00e888b0f"
     }
   ]
 }

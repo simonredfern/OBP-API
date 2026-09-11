@@ -94,6 +94,7 @@ class SuccessSweepTest extends ServerSetupWithTestData with DefaultUsers with Sw
     "OBPv4.0.0-getMyApiCollectionEndpoints" -> "400 OBP-30079: no ApiCollection named API_COLLECTION_NAME",
     "OBPv6.0.0-getWebUiProp"                -> "400 OBP-08003: no WebUi prop named WEBUI_PROP_NAME",
     "OBPv7.0.0-getRoutingScheme"            -> "404 OBP-30514: no routing scheme named SCHEME",
+    "OBPv7.0.0-getGlossaryItem"             -> "404 OBP-30571: no Glossary Item titled TITLE",
     "OBPv7.0.0-getDynamicGlossaryItem"      -> ("404 OBP-30571: no Dynamic Glossary Item titled TITLE. " +
       "Like SCHEME above, TITLE is a placeholder the catalog does not substitute, so the literal " +
       "path is called")

@@ -1911,7 +1911,7 @@ object Http4s300 {
       |Returns the glossary of the API: the union of
       |
       |* **Static Glossary Items**, compiled into the API and only changing when the API is redeployed, and
-      |* **Dynamic Glossary Items**, held in the database and maintained at runtime over the Glossary Item endpoints (POST / PUT / DELETE /obp/v7.0.0/glossary-items).
+      |* **Dynamic Glossary Items**, held in the database and maintained at runtime over the Glossary endpoints (POST /obp/v7.0.0/api/glossary, PUT and DELETE /obp/v7.0.0/api/glossary/TITLE).
       |
       |A Dynamic Glossary Item whose title matches a static one (compared case insensitively) replaces it, so an operator can correct or localise shipped text without a redeploy.
       |

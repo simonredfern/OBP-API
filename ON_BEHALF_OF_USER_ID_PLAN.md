@@ -383,7 +383,7 @@ Progress:
 | # | provider | status |
 |---|---|---|
 | 1 | `MapperAccountHolders.getOrCreateAccountHolder` (`AccountHolderUser`) | ✅ 2026-09-03. Resolves `user.userId` via `attributedUserId`, re-fetches the on-behalf-of `User` once when delegated, writes the row for it. All five callers (v5/v7 createAccount via `BankAccountCreation`, holding accounts, `AfterApiAuth`, `AuthUser.refreshUser`, sandbox import) go through it. `AgentDelegationTest` has three scenarios (consent user → human holds; original user unchanged; unbound consent fails closed). Endpoint-level `cc.onBehalfOfUserId` in v5/v7 createAccount stays as clarity. |
-| 2 | `MappedUserCustomerLink.createUserCustomerLink` | next |
+| 2 | `MappedUserCustomerLink.createUserCustomerLink` | ✅ 2026-09-10 (working tree). Provider resolves via `linkOwnerUserId` on the three methods keyed by a single user id: `createUserCustomerLink`, `getOCreateUserCustomerLink`, and the two-argument `getUserCustomerLink`. Those three had to move together: the two-argument lookup is every caller's "already linked?" pre-check immediately before a create, and the table carries `UniqueIndex(mUserId, mCustomerId)` — a redirected create paired with an unredirected pre-check passes the check on the consent user and then breaks the index on the human (500, not the intended 400 `CustomerAlreadyExistsForUser`, since `createUserCustomerLink` has no `tryo`). `getUserCustomerLinksByUserId` is deliberately **not** resolved: it also serves the admin lookup at `GET /banks/BANK_ID/user_customer_links/users/USER_ID`, where the id is an explicit target and rewriting it would silently answer a different question; endpoints meaning "my links" pass the resolved id themselves. Phase 3 guards added to all five explicit-target callers (v1.4.0 `addCustomer`, v2.0.0 / v2.1.0 `createCustomer` — guarded only when `user_id` is supplied, since an omitted one means the caller and the provider redirects it — and v2.0.0 / v4.0.0 `createUserCustomerLinks`), each with `InvalidUserId` added to the ResourceDoc error list and a digest-bound `parity_allowlist.json` entry. `AgentDelegationTest` has five scenarios (consent user → human; original user unchanged; unbound consent fails closed; the pre-check asks about the row the create would write; listing by user id is not redirected). 33 scenarios green. |
 | 3 | `DynamicData.UserId` (`DynamicDataUser`), `DynamicEntity.UserId` (`DynamicEntityUser`) | ✅ 2026-09-04 (working tree). Provider `MappedDynamicDataProvider` resolves the caller on **every** entry point (save, update, get, getAll, delete, existsData): personal rows are keyed by the same column on reads and writes, so the redirect must be symmetric or a consent user could not read back what it wrote. Definition creator resolved in `MappedDynamicEntityProvider.createOrUpdate`. **Decided 2026-09-04 (access control): a consent user gets no `personal_requires_role=false` waiver** — on `/my` endpoints it must hold the entity's role, so a Consent has to name the entity explicitly before its holder reaches the human's personal rows (`Http4sDynamicEntity.personalRoleWaived`); the projection read path resolves the owner the same way (`personalRowOwner`). Doc strings of the six My endpoints say so; `UserHasMissingRoles` is now always in their error lists. Tests: `AgentDelegationTest` (provider + definition) and `DynamicEntityConsentUserTest` (HTTP: human no role → 201; consent without role → 403 naming the role; consent with roles → 201, row readable by both, stored on the human). Consumer: the Portal / API Manager Opey conversation entities (`obp_portal_opey_conversation`, `obp_manager_opey_conversation`); the apps write those as the human; **built 2026-09-04 in OBP-Frontend** (definitions, startup bootstrap, `ConversationRecorder`, rows under My Data). **Out of scope here: row-level (ACL) entities** — `DynamicDataAccess.UserId` bootstrap grant and the `allows` checks both stay on the consent user (consistent with each other: rows strand, nothing leaks); `DynamicDataAccessUser` is a later Phase 2 row. |
 | — | `MappedBank.CreatedByUserId` (`BankCreator`) | seen in the wild 2026-09-03: a bank created through Opey under a temporary consent has `createdbyuserid` = the consent user (the creator *grant* went to the human, the *column* did not). `createMyBank`'s self-service limit already counts via `humanAndAgentUserIds`, so nothing breaks today, but "banks created by me" style reads will miss it. Do with the mechanical batch. |
 
@@ -421,6 +421,52 @@ Doctrine (settled 2026-09-01): implicit self → redirect in provider; explicit 
 6. Cache: in-memory Guava via `Caching.memoizeSyncWithImMemory`, 10 min TTL, never memoise the not-yet-bound consent case.
 7. The `Reject` policy covers consent creation and OAuth consumer/token creation by a consent user.
 8. v6/v7 `/users/current` JSON field `on_behalf_of`: today set only for OBP-native consents (from the JWT creator), null for BG/UK consents although they have a human. After Phase 0 row 8 it reads `consentCreator.or(consenter)`, so BG/UK consent callers get the consenter too; plain users and OBP-consent callers see no change. It must not read the resolved `onBehalfOfUser`, whose `.or(user)` fallback would show every plain user as their own on-behalf-of. Optional; not needed by Phase 1. Accepted as correct; note in the release notes.
+
+## Decisions (2026-09-10/11)
+
+9. **SCA/OTP delivery is NOT part of the attribution sweep.** `APIUtil.getPhoneNumbersByUserId` /
+   `getEmailsByUserId` (called by `LocalMappedConnector` to deliver EMAIL and SMS challenges) still read
+   by the caller's own id, so a consent-user-initiated challenge finds no phone number and nothing is
+   sent. Resolving them to the on-behalf-of user would deliver the OTP to the human — correct in itself,
+   and the same conclusion `ConsentUtil.scala` already reaches for Berlin Group ("the OTP would go to the
+   TPP and never reach the PSU") — but the flow it unblocks is the human reading a code off their phone
+   and handing it to the agent, which is the relay pattern SCA exists to prevent. Failing closed is the
+   better state until agent-initiated SCA has its own answer (the Consent carrying the authorisation, or
+   the human answering the challenge directly in the Portal). Its own decision, not a ride-along.
+
+10. **Endpoint-level tag: `onBehalfOfMode`, verb-shaped values.** The projection of `AttributionPolicy`
+   onto endpoints is not 1:1 — redirect-vs-guard is a distinction that exists only at endpoint level
+   (`AccountAccessRequestTarget` is policy `UseOnBehalfOfUserId` but an explicit target the endpoint
+   refuses), and most endpoints touch no user column at all. So the endpoint enum needs one value the
+   column enum lacks, plus a default. Field name mirrors its `ResourceDoc` sibling `authMode:
+   EndpointAuthMode`; values are verb-shaped rather than reusing the policy words:
+   `ActsForCallerOnly` (default), `ActsForOnBehalfOfUser`, `ActsForConsentUser`, `RequiresOriginalUser`,
+   `RefusesConsentUser`. The tag is documentation plus a test hook, never a permission — enforcement
+   stays in the provider redirect and the endpoint guards, because a consent user can call any version.
+   `OnBehalfOfOwnershipSweepTest` checks the declaration against observed writes, so a wrong claim fails
+   the build. Not yet built.
+
+11. **Visibility is granted by resource *type*, all-or-nothing within its scope — never by provenance.**
+   Ownership answers the human's side: the row says H, so H sees it through every existing endpoint.
+   It creates the agent's side, which Simon named exactly: *"it's like dropping stones into a well, it can
+   never check they are there."* An agent that cannot read back its own work will retry, duplicate, or
+   report success it never verified. So agents must read — but **not** by provenance ("the rows I created").
+   Two reasons. (a) A provenance-filtered view is partial and the agent cannot explain it to itself: some of
+   H's customers and not others, with no way to tell *doesn't exist* from *exists but not mine* — precisely
+   the ambiguity that makes automated callers act badly and confidently. (b) It would require every table to
+   record which consent wrote each row, i.e. the per-table on-behalf column this model rejects. (Provenance
+   *is* recorded where it is genuinely about accountability — `MappedTransactionRequest` stores both
+   `mUserId` and `mOnBehalfOfUserId` — but that is audit, not an access rule.) So: if the Consent names the
+   type and scope, the agent sees **all** of the granting User's rows of that type, exactly as the User does;
+   if not, it sees none and is told which `my_resources` entry is missing. Never an empty list where a 403 is
+   meant. **Built 2026-09-11** for linked Customers: `my_resources.linked_customers` (`bank_id` + `actions`,
+   mirroring `personal_dynamic_entities`), claim `ConsentLinkedCustomers`, `coversLinkedCustomers` /
+   `linkedCustomerBankIds`, shape validation in `Consent.validateMyResources`, and two v7 reads behind it —
+   `getMyCustomersAtBank` (`GET /banks/BANK_ID/my/customers`) and `getMyCustomers` (`GET /my/customers`,
+   union over the Banks the Consent names). Older versions are untouched and fail closed, which is the only
+   direction in which version-scoping an agent-aware read is safe (Decision 6 of `ai_agent_talk.md`: the
+   version is not a security boundary — a consent user may call v5). Not yet covered by an HTTP-level test
+   with a real consent JWT; the model, the round trip and the validation are covered in `AgentDelegationTest`.
 
 ## Risks
 
