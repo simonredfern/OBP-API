@@ -5004,6 +5004,16 @@ object APIUtil extends MdcLoggable with CustomJsonFormats{
   lazy val allStaticResourceDocs: List[ResourceDoc] = ResourceDocRegistry.allStaticResourceDocs
 
   def allDynamicResourceDocs= (DynamicEntityHelper.doc ++ DynamicEndpointHelper.doc ++ DynamicEndpoints.dynamicResourceDocs).toList
+
+  /**
+   * The dynamic docs a versioned resource-docs listing shows. v7.0.0 documents Dynamic Entity records at
+   * their v7.0.0 URLs (/obp/v7.0.0/banks/BANK_ID/dynamic-entities/...); every other version at the
+   * unversioned /obp/dynamic-entity/... URLs, as [[allDynamicResourceDocs]] does.
+   */
+  def allDynamicResourceDocsIn(requestedApiVersion: ScannedApiVersion): List[ResourceDoc] =
+    if (requestedApiVersion == ApiVersion.v7_0_0)
+      (DynamicEntityHelper.v700Doc ++ DynamicEndpointHelper.doc ++ DynamicEndpoints.dynamicResourceDocs).toList
+    else allDynamicResourceDocs
   
   def getAllResourceDocs = allStaticResourceDocs ++ allDynamicResourceDocs
 
