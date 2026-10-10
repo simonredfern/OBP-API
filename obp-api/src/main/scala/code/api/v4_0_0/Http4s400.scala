@@ -10573,6 +10573,7 @@ object Http4s400 {
             }
             (postedJson, appType) = postedJsonAndAppType
             _ <- NewStyle.function.hasEntitlement("", u.userId, code.api.util.ApiRole.canCreateConsumer, Some(cc))
+            _ <- code.api.util.RedirectUrlValidation.checkRedirectUrls(postedJson.redirect_url, Some(cc))
             (consumer, callContext) <- createConsumerNewStyle(
               key = Some(LiftHelpers.randomString(40).toLowerCase),
               secret = Some(LiftHelpers.randomString(40).toLowerCase),
@@ -10927,7 +10928,7 @@ object Http4s400 {
           "Web",
           "Description",
           "some@email.com",
-          "redirecturl",
+          "https://app.example.com/callback",
           "createdby",
           true,
           new Date(),
@@ -10936,7 +10937,7 @@ object Http4s400 {
             |-----END CERTIFICATE-----""".stripMargin
         ),
         consumerJsonV400,
-        List(AuthenticatedUserIsRequired, UserHasMissingRoles, InvalidJsonFormat, UnknownError),
+        List(AuthenticatedUserIsRequired, UserHasMissingRoles, InvalidJsonFormat, InvalidRedirectUrl, RedirectUrlHostNotAllowed, UnknownError),
         List(apiTagConsumer),
         Some(List(canCreateConsumer)),
         http4sPartialFunction = Some(createConsumer))

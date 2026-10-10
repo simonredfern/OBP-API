@@ -1815,17 +1815,17 @@
       "version": "v5_1_0",
       "endpoint": "createConsumer",
       "field": "description",
-      "reason": "Adds a paragraph pointing the developer of an app the installation runs itself (Portal, API Manager, Opey, OBP-Sentinel) to Platform Apps, so its Consumer can be granted Roles as Scopes.",
+      "reason": "Adds a paragraph pointing the developer of an app the installation runs itself (Portal, API Manager, Opey, OBP-Sentinel) to Platform Apps, so its Consumer can be granted Roles as Scopes. Adds the redirect URL rules, this instance's redirect URL host list, and a link to the Redirect URL glossary entry.",
       "lift_digest": "7e639520852912f5fbb9938d9d3f65943054eb8a158dfa7105416a43870d3ce4",
-      "http4s_digest": "983ad12ac6c61fc5637ee32d4fbc95592ed259c2588b8b50feab0376fec554a6"
+      "http4s_digest": "0dc9ec5c88cccd750dc082dad3a38334251bfcd2c4bdb1e1b48ac3076f91aed8"
     },
     {
       "version": "v5_1_0",
       "endpoint": "createMyConsumer",
       "field": "description",
-      "reason": "Adds a paragraph pointing the developer of an app the installation runs itself (Portal, API Manager, Opey, OBP-Sentinel) to Platform Apps, so its Consumer can be granted Roles as Scopes.",
+      "reason": "Adds a paragraph pointing the developer of an app the installation runs itself (Portal, API Manager, Opey, OBP-Sentinel) to Platform Apps, so its Consumer can be granted Roles as Scopes. Adds the redirect URL rules, this instance's redirect URL host list, and a link to the Redirect URL glossary entry.",
       "lift_digest": "bba5099d62c01e4fd03073a2c54ef3f5669d0cb0f756d8c2556dd48c9dc8cbc2",
-      "http4s_digest": "fb85fa76f84dab2e7a328d65e38b2d1ecf9eabe90ca99efdd7e8d24ff9bcd152"
+      "http4s_digest": "ff968d07d614393257e9f40efd3293e0c4f1872e86ec07955e1429756b8b364c"
     },
     {
       "version": "v3_1_0",
@@ -1946,6 +1946,110 @@
       "reason": "Lists the accepted attribute types from AttributeTypeDocs.typeFieldDescription, which adds DECIMAL and BOOLEAN (new enum values) to the four the Lift text listed and says when to use DECIMAL.",
       "lift_digest": "d2f72f200b8c01cb57f1e07c608a160c125d3e210f9282fbbfa532c72f802248",
       "http4s_digest": "789c5598a7af5691282a4192dc5d38199bb068928a392b08314aab3b96d5b6af"
+    },
+    {
+      "version": "v2_1_0",
+      "endpoint": "updateConsumerRedirectUrl",
+      "field": "errorResponseBodies",
+      "reason": "Adds RedirectUrlHostNotAllowed (OBP-20109) for instances that set redirect_url_allowed_hosts, alongside InvalidRedirectUrl (OBP-20108): the redirect URL is checked against the redirect URL rules before it is stored.",
+      "lift_digest": "f06cd9a2114625e9b6a37b8e57fa91e7bdb6586b9899fcd9265713aed3e873a4",
+      "http4s_digest": "b1e42b699ef095f7b2a523062366197eee3538c96068563f1bd25f0197559e33"
+    },
+    {
+      "version": "v2_2_0",
+      "endpoint": "createConsumer",
+      "field": "errorResponseBodies",
+      "reason": "Adds RedirectUrlHostNotAllowed (OBP-20109) for instances that set redirect_url_allowed_hosts, alongside InvalidRedirectUrl (OBP-20108): the redirect URL is checked against the redirect URL rules before it is stored.",
+      "lift_digest": "647479a642a49ee3a80a4bfc28ab2ae3413796d26a3eecbc48411d6e05620ad5",
+      "http4s_digest": "f1a3eab881d039a14b768fca036adc44759cc99d416fc176c8eea09829037ccf"
+    },
+    {
+      "version": "v2_2_0",
+      "endpoint": "createConsumer",
+      "field": "exampleRequestBody",
+      "reason": "The example redirect URL is now a valid https callback; the old placeholder would be rejected by the redirect URL rules.",
+      "lift_digest": "7b5796ab8e816b80f886a5d44a8414394170d7e2d61ab2ed6edb6ae4a58841e0",
+      "http4s_digest": "28fbe0a0ed9a7eb4e229b285c1715bc32b77a0485d6db6c9a3661ea037859a8b"
+    },
+    {
+      "version": "v2_2_0",
+      "endpoint": "createConsumer",
+      "field": "successResponseBody",
+      "reason": "The example redirect URL is now a valid https callback; the old placeholder would be rejected by the redirect URL rules.",
+      "lift_digest": "4cb0d642b4a86b86be87cad67a311c77f1d68aacafb957b2e4e83d23ae9695fb",
+      "http4s_digest": "5914176f0c140e0e56de59f39988dd4bd8312a0c873aa816729a12d5037ae936"
+    },
+    {
+      "version": "v4_0_0",
+      "endpoint": "createConsumer",
+      "field": "errorResponseBodies",
+      "reason": "Adds RedirectUrlHostNotAllowed (OBP-20109) for instances that set redirect_url_allowed_hosts, alongside InvalidRedirectUrl (OBP-20108): the redirect URL is checked against the redirect URL rules before it is stored.",
+      "lift_digest": "647479a642a49ee3a80a4bfc28ab2ae3413796d26a3eecbc48411d6e05620ad5",
+      "http4s_digest": "f1a3eab881d039a14b768fca036adc44759cc99d416fc176c8eea09829037ccf"
+    },
+    {
+      "version": "v4_0_0",
+      "endpoint": "createConsumer",
+      "field": "exampleRequestBody",
+      "reason": "The example redirect URL is now a valid https callback; the old placeholder would be rejected by the redirect URL rules.",
+      "lift_digest": "bedf35738b2bdbadfd0cf52925b59047394f1479aaf041401e689921a15d5da5",
+      "http4s_digest": "64bb412d6630509cccfda9d1cba36da072ace8e189a6798811648b1c2267aaa7"
+    },
+    {
+      "version": "v5_1_0",
+      "endpoint": "createConsumer",
+      "field": "errorResponseBodies",
+      "reason": "Adds RedirectUrlHostNotAllowed (OBP-20109) for instances that set redirect_url_allowed_hosts, alongside InvalidRedirectUrl (OBP-20108): the redirect URL is checked against the redirect URL rules before it is stored.",
+      "lift_digest": "647479a642a49ee3a80a4bfc28ab2ae3413796d26a3eecbc48411d6e05620ad5",
+      "http4s_digest": "f1a3eab881d039a14b768fca036adc44759cc99d416fc176c8eea09829037ccf"
+    },
+    {
+      "version": "v5_1_0",
+      "endpoint": "createMyConsumer",
+      "field": "errorResponseBodies",
+      "reason": "Adds RedirectUrlHostNotAllowed (OBP-20109) for instances that set redirect_url_allowed_hosts, alongside InvalidRedirectUrl (OBP-20108): the redirect URL is checked against the redirect URL rules before it is stored.",
+      "lift_digest": "ab6b9a504c9dafbcc134976d9f0b976cbe222c9054b9c811c5570adfb79ae6ce",
+      "http4s_digest": "8aea0f733a9dab1db64f8bcdc5e240c17467c6eee80d468b48c76dd8f7be81d3"
+    },
+    {
+      "version": "v5_1_0",
+      "endpoint": "createConsumerDynamicRegistration",
+      "field": "errorResponseBodies",
+      "reason": "Adds InvalidRedirectUrl (OBP-20108): the redirect URL is now checked against the redirect URL rules (https, http only for loopback, reverse-domain app schemes; no wildcard, user information or fragment) before it is stored.",
+      "lift_digest": "4e74e64b929f5a2a290113b4f8bfabd520ea39ad6fa4fe1a498fe76bbb805631",
+      "http4s_digest": "64c74c1413b68ad5553717d6ee442ed730ff08a383c419d597c5ddda9b711b72"
+    },
+    {
+      "version": "v5_1_0",
+      "endpoint": "updateConsumerRedirectURL",
+      "field": "errorResponseBodies",
+      "reason": "Adds RedirectUrlHostNotAllowed (OBP-20109) for instances that set redirect_url_allowed_hosts, alongside InvalidRedirectUrl (OBP-20108): the redirect URL is checked against the redirect URL rules before it is stored.",
+      "lift_digest": "f06cd9a2114625e9b6a37b8e57fa91e7bdb6586b9899fcd9265713aed3e873a4",
+      "http4s_digest": "b1e42b699ef095f7b2a523062366197eee3538c96068563f1bd25f0197559e33"
+    },
+    {
+      "version": "v6_0_0",
+      "endpoint": "getOidcClient",
+      "field": "description",
+      "reason": "States that redirect_uris leaves out stored entries that break the redirect URL rules, which the endpoint now filters, and links the Redirect URL glossary entry.",
+      "lift_digest": "49ddd5f6ec985292ee48802cd18e479c5a1b46fee368ce0d06a653e07eb65e90",
+      "http4s_digest": "afb1da33f039efe8cff6de2d718c11e552434fb08f7e41a66d82a26d07be0de6"
+    },
+    {
+      "version": "v6_0_0",
+      "endpoint": "verifyOidcClient",
+      "field": "description",
+      "reason": "States that redirect_uris leaves out stored entries that break the redirect URL rules, which the endpoint now filters, and links the Redirect URL glossary entry.",
+      "lift_digest": "120f4c6ed1083567d078a7afbb5c2e97d8de69e68e7314166c05e3afcdf50ecd",
+      "http4s_digest": "670c0479be7d2aa3c8beb18d2e1708c3ec7e67b2a1b625018b07a89c770fe962"
+    },
+    {
+      "version": "v5_1_0",
+      "endpoint": "updateConsumerRedirectURL",
+      "field": "description",
+      "reason": "Adds the redirect URL rules, this instance's redirect URL host list, and a link to the Redirect URL glossary entry.",
+      "lift_digest": "d2319e98d44314c5142a17c76318478bd3f2e88a41c560f30fd99ebde75a6b9b",
+      "http4s_digest": "6ae0abfeccdb9959fc3efe679b4a279e6aefb89f584a3d8d0f025620f03329f9"
     }
   ]
 }

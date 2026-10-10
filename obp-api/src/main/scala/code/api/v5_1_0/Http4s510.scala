@@ -658,6 +658,7 @@ object Http4s510 {
               (js, appType)
             }
             (postedJson, appType) = tup
+            _ <- code.api.util.RedirectUrlValidation.checkRedirectUrls(postedJson.redirect_url, Some(cc))
             (consumer, _) <- createConsumerNewStyle(
               key = Some(Helpers.randomString(40).toLowerCase),
               secret = Some(Helpers.randomString(40).toLowerCase),
@@ -676,6 +677,13 @@ object Http4s510 {
           } yield JSONFactory510.createConsumerJsonOnlyForPostResponseV510(consumer, None)
         }
     }
+
+    // For the Consumer docs that take a redirect_url: the rules it must meet and this instance's host list.
+    private val redirectUrlRulesText =
+      s"""**redirect_url** must meet the redirect URL rules (https; http only for localhost; or an app scheme in
+      |reverse-domain form; no wildcard, user information or fragment). ${code.api.util.RedirectUrlValidation.allowedHostsDescription}
+      |See ${Glossary.getGlossaryItemLink("Redirect URL")}
+      |""".stripMargin
 
     // For the Create Consumer docs: how an app the installation runs itself gets the Roles its own calls need.
     private val platformAppConsumerText =
@@ -770,6 +778,8 @@ object Http4s510 {
       |
       |**Important**: The key and secret are only shown once in the response. Save them securely as they cannot be retrieved later.
       |
+      |$redirectUrlRulesText
+      |
       |$platformAppConsumerText
       |
       |${consumerDisabledText()}
@@ -779,7 +789,7 @@ object Http4s510 {
       |""",
       createConsumerRequestJsonV510,
       consumerJsonOnlyForPostResponseV510,
-      List(AuthenticatedUserIsRequired, UserHasMissingRoles, InvalidJsonFormat, UnknownError),
+      List(AuthenticatedUserIsRequired, UserHasMissingRoles, InvalidJsonFormat, InvalidRedirectUrl, RedirectUrlHostNotAllowed, UnknownError),
       List(apiTagConsumer),
       Some(List(canCreateConsumer)),
       authMode = UserOrApplication,
@@ -2864,10 +2874,6 @@ object Http4s510 {
           implicit val cc: code.api.util.CallContext = req.callContext
           for {
             user <- Future.successful(cc.user.openOrThrowException(AuthenticatedUserIsRequired))
-            _ <- APIUtil.getPropsAsBoolValue("consumers_enabled_by_default", false) match {
-              case true  => Future.successful(Full(()))
-              case false => NewStyle.function.hasEntitlement("", user.userId, ApiRole.canUpdateConsumerRedirectUrl, Some(cc))
-            }
             postJson <- NewStyle.function.tryons(InvalidJsonFormat, 400, Some(cc)) {
               com.openbankproject.commons.util.JsonAliases.parse(cc.httpBody.getOrElse("")).extract[ConsumerRedirectUrlJSON]
             }
@@ -2875,6 +2881,7 @@ object Http4s510 {
             _ <- Helper.booleanToFuture(UserNoPermissionUpdateConsumer, 400, Some(cc)) {
               consumer.createdByUserId.equals(user.userId)
             }
+            _ <- code.api.util.RedirectUrlValidation.checkRedirectUrls(postJson.redirect_url, Some(cc))
             updatedConsumer <- NewStyle.function.updateConsumer(
               id = consumer.id.get,
               isActive = Some(APIUtil.getPropsAsBoolValue("consumers_enabled_by_default", defaultValue = false)),
@@ -2897,10 +2904,11 @@ object Http4s510 {
         |
         | Or use the endpoint 'Get Consumers' to get it
         |
+        |$redirectUrlRulesText
       """.stripMargin,
       consumerRedirectUrlJSON,
       consumerJSON,
-      List(AuthenticatedUserIsRequired, UserHasMissingRoles, UnknownError),
+      List(AuthenticatedUserIsRequired, UserHasMissingRoles, InvalidRedirectUrl, RedirectUrlHostNotAllowed, UnknownError),
       List(apiTagConsumer),
       Some(List(canUpdateConsumerRedirectUrl)),
       http4sPartialFunction = Some(updateConsumerRedirectURL)
@@ -3059,6 +3067,7 @@ object Http4s510 {
               (js, appType)
             }
             (postedJson, appType) = tup
+            _ <- code.api.util.RedirectUrlValidation.checkRedirectUrls(postedJson.redirect_url, Some(cc))
             (consumer, _) <- createConsumerNewStyle(
               key = Some(Helpers.randomString(40).toLowerCase),
               secret = Some(Helpers.randomString(40).toLowerCase),
@@ -3085,11 +3094,13 @@ object Http4s510 {
       "Create a Consumer",
       s"""Create a Consumer (Authenticated access).
       |
+      |$redirectUrlRulesText
+      |
       |$platformAppConsumerText
       |""",
       createConsumerRequestJsonV510,
       consumerJsonV510,
-      List(AuthenticatedUserIsRequired, InvalidJsonFormat, UnknownError),
+      List(AuthenticatedUserIsRequired, InvalidJsonFormat, InvalidRedirectUrl, RedirectUrlHostNotAllowed, UnknownError),
       List(apiTagConsumer),
       None,
       http4sPartialFunction = Some(createMyConsumer)
@@ -3148,6 +3159,8 @@ object Http4s510 {
             postedJson <- NewStyle.function.tryons(InvalidJsonFormat, 400, Some(cc)) {
               com.openbankproject.commons.util.JsonAliases.parse(JwtUtil.getSignedPayloadAsJson(postedJwt.jwt).getOrElse("{}")).extract[ConsumerPostJsonV510]
             }
+            // TPPs register their own domains, so this instance's redirect URL host list does not apply here.
+            _ <- code.api.util.RedirectUrlValidation.checkRedirectUrls(postedJson.redirect_url.getOrElse(""), Some(cc), applyHostList = false)
             certificateInfo: CertificateInfoJsonV510 <- Future(X509.getCertificateInfo(pem))
               .map(unboxFullOrFail(_, Some(cc), X509GeneralError))
             _ <- Helper.booleanToFuture(RegulatedEntityNotFoundByCertificate, 400, Some(cc)) {
@@ -3268,7 +3281,7 @@ object Http4s510 {
       |""",
       ConsumerJwtPostJsonV510("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXNjcmlwdGlvbiI6IlRQUCBkZXNjcmlwdGlvbiJ9.c5gPPsyUmnVW774y7h2xyLXg0wdtu25nbU2AvOmyzcWa7JTdCKuuy3CblxueGwqYkQDDQIya1Qny4blyAvh_a1Q28LgzEKBcH7Em9FZXerhkvR9v4FWbCC5AgNLdQ7sR8-rUQdShmJcGDKdVmsZjuO4XhY2Zx0nFnkcvYfsU9bccoAvkKpVJATXzwBqdoEOuFlplnbxsMH1wWbAd3hbcPPWTdvO43xavNZTB5ybgrXVDEYjw8D-98_ZkqxS0vfvhJ4cGefHViaFzp6zXm7msdBpcE__O9rFbdl9Gvup_bsMbrHJioIrmc2d15Yc-tTNTF9J4qjD_lNxMRlx5o2TZEw"),
       consumerJsonV510,
-      List(InvalidJsonFormat, UnknownError),
+      List(InvalidJsonFormat, InvalidRedirectUrl, UnknownError),
       List(apiTagDirectory, apiTagConsumer),
       Some(Nil),
       http4sPartialFunction = Some(createConsumerDynamicRegistration)

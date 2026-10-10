@@ -1269,13 +1269,6 @@ object Http4s210 {
       case req @ PUT -> `prefixPath` / "management" / "consumers" / consumerId / "consumer" / "redirect_url" =>
         EndpointHelpers.withUserAndBody[ConsumerRedirectUrlJSON, ConsumerJsonV210](req) { (user, body, cc) =>
           for {
-            _ <- APIUtil.getPropsAsBoolValue("consumers_enabled_by_default", false) match {
-              case true => Future.unit
-              case false =>
-                code.util.Helper.booleanToFuture(UserHasMissingRoles + canUpdateConsumerRedirectUrl, failCode = 403, cc = Some(cc)) {
-                  APIUtil.hasEntitlement("", user.userId, canUpdateConsumerRedirectUrl)
-                }
-            }
             consumerIdLong <- NewStyle.function.tryons(InvalidConsumerId, 400, Some(cc)) {
               consumerId.toLong
             }
@@ -1283,6 +1276,7 @@ object Http4s210 {
             _ <- code.util.Helper.booleanToFuture(UserNoPermissionUpdateConsumer, failCode = 400, cc = Some(cc)) {
               consumer.createdByUserId.equals(user.userId)
             }
+            _ <- code.api.util.RedirectUrlValidation.checkRedirectUrls(body.redirect_url, Some(cc))
             updatedConsumer <- NewStyle.function.updateConsumer(
               id          = consumer.id.get,
               isActive    = Some(APIUtil.getPropsAsBoolValue("consumers_enabled_by_default", false)),
@@ -1305,9 +1299,9 @@ object Http4s210 {
         | 
       """.stripMargin,
       consumerRedirectUrlJSON, consumerJSON,
-      List(AuthenticatedUserIsRequired, UserHasMissingRoles, UnknownError),
+      List(AuthenticatedUserIsRequired, UserHasMissingRoles, InvalidRedirectUrl, RedirectUrlHostNotAllowed, UnknownError),
       List(apiTagConsumer),
-      None,
+      Some(List(canUpdateConsumerRedirectUrl)),
       http4sPartialFunction = Some(updateConsumerRedirectUrl))
 
     // ─── getMetrics ───────────────────────────────────────────────────────────

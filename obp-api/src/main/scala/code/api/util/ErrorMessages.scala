@@ -350,6 +350,8 @@ object ErrorMessages {
   val BankAccountBalanceNotFoundById = "OBP-20105: BankAccountBalance not found. Please specify a valid value for BALANCE_ID."
   val UserNotFoundByToken = "OBP-20106: User not found by token. The validation token is invalid or expired."
   val UserAlreadyValidated = "OBP-20107: User email is already validated."
+  val InvalidRedirectUrl = "OBP-20108: Invalid redirect URL. Each redirect URL must use https, use http only for localhost, 127.0.0.1 or [::1], or use an app scheme in reverse-domain form such as com.example.app, and must not contain a wildcard, user information or a fragment. Rejected entry: "
+  val RedirectUrlHostNotAllowed = "OBP-20109: Redirect URL host not allowed. This instance only accepts redirect URLs that point to the hosts listed for it. Rejected entry: "
 
   // OAuth 2
   val ApplicationNotIdentified = "OBP-20200: The application cannot be identified. "

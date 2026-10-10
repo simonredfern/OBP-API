@@ -2110,8 +2110,8 @@ object Http4s600 {
               }
             }
           } yield {
-            val redirectUris = Option(consumer.redirectURL.get).filter(_.nonEmpty)
-              .map(_.split("[,\\s]+").map(_.trim).filter(_.nonEmpty).toList).getOrElse(List.empty)
+            // Stored entries that fail the redirect URL rules (written before they existed) are never handed out.
+            val redirectUris = code.api.util.RedirectUrlValidation.validEntries(consumer.redirectURL.get)
             GetOidcClientResponseJsonV600(
               client_id = clientId, client_name = consumer.name.get,
               consumer_id = consumer.consumerId.get,
@@ -2133,8 +2133,7 @@ object Http4s600 {
           } yield {
             consumerBox match {
               case Full(consumer) if consumer.isActive.get && consumer.secret.get == postedData.client_secret =>
-                val redirectUris = Option(consumer.redirectURL.get).filter(_.nonEmpty)
-                  .map(_.split("[,\\s]+").map(_.trim).filter(_.nonEmpty).toList)
+                val redirectUris = Some(code.api.util.RedirectUrlValidation.validEntries(consumer.redirectURL.get)).filter(_.nonEmpty)
                 VerifyOidcClientResponseJsonV600(
                   valid = true,
                   client_id = Some(postedData.client_id),
@@ -9558,6 +9557,10 @@ object Http4s600 {
         |Returns client information including name, consumer_id, redirect_uris, and enabled status.
         |This endpoint does not verify the client secret - use POST /oidc/clients/verify for authentication.
         |
+        |redirect_uris lists only the Consumer's redirect URLs that meet the redirect URL rules (https; http only for localhost,
+        |127.0.0.1 or [::1]; or an app scheme in reverse-domain form; no wildcard, user information or fragment). A stored entry
+        |that fails them is left out, so an OIDC provider never redirects to it. See ${Glossary.getGlossaryItemLink("Redirect URL")}
+
         |${userAuthenticationMessage(true)}
         |""",
         EmptyBody,
@@ -9585,6 +9588,10 @@ object Http4s600 {
         |Returns `valid: true` if the client_id and client_secret match an active consumer.
         |Also returns the consumer_id and redirect_uris for use by the OIDC provider.
         |
+        |redirect_uris lists only the Consumer's redirect URLs that meet the redirect URL rules (https; http only for localhost,
+        |127.0.0.1 or [::1]; or an app scheme in reverse-domain form; no wildcard, user information or fragment). A stored entry
+        |that fails them is left out, so an OIDC provider never redirects to it. See ${Glossary.getGlossaryItemLink("Redirect URL")}
+
         |${userAuthenticationMessage(true)}
         |""",
         VerifyOidcClientRequestJsonV600(
