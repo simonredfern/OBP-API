@@ -29,7 +29,7 @@ package code.api.util
 
 import java.net.URI
 
-import code.api.util.ErrorMessages.InvalidRedirectUrl
+import code.api.util.ErrorMessages.{InvalidRedirectUrl, RedirectUrlHostNotAllowed}
 import code.util.Helper
 import net.liftweb.common.Box
 
@@ -55,6 +55,14 @@ import scala.util.Try
  *  - never a wildcard (`*`), user information (`user@host`) or a fragment (`#...`).
  *
  * An empty value is allowed: Consumers that only use DirectLogin or client credentials have no redirect.
+ *
+ * An instance can also limit which hosts a Consumer's redirect URL may point to, with the optional prop
+ * `redirect_url_allowed_hosts`. Empty (the default) puts no limit on hosts. When it is set, every https or
+ * http entry must name a listed host, where `portal.example.com` matches that host exactly and
+ * `.example.com` matches example.com and any host under it; the API's own host is always included. App
+ * schemes have no host to check and are not affected. The host list is checked when an endpoint writes a
+ * Consumer's redirect URL. It is not applied to Berlin Group dynamic registration or TPP redirect headers,
+ * which by definition belong to third parties, nor to redirect URLs already stored.
  */
 object RedirectUrlValidation {
 
@@ -62,6 +70,50 @@ object RedirectUrlValidation {
 
   // A reverse-domain scheme: at least two dot-separated labels, e.g. com.example.app or x-com.example.ios.
   private val reverseDomainScheme = """^[a-z][a-z0-9+-]*(\.[a-z0-9+-]+)+$""".r
+
+  /**
+   * The hosts a Consumer redirect URL may point to on this instance, or Nil when there is no limit.
+   * This is a def, not a val, so a change to the prop (in tests, or after a restart) is always seen.
+   */
+  def allowedHosts: List[String] = {
+    val listed = APIUtil.getPropsValue("redirect_url_allowed_hosts", "")
+      .split("[,\\s]+").map(_.trim.toLowerCase).filter(_.nonEmpty).toList
+    if (listed.isEmpty) Nil
+    else {
+      val ownHost = APIUtil.getPropsValue("hostname").toOption
+        .flatMap(hostname => Try(new URI(hostname)).toOption.flatMap(uri => Option(uri.getHost)))
+        .map(_.toLowerCase)
+      (listed ++ ownHost).distinct
+    }
+  }
+
+  private def hostIsAllowed(host: String, allowed: List[String]): Boolean = {
+    val lowerCaseHost = host.toLowerCase
+    allowed.exists { allowedHost =>
+      if (allowedHost.startsWith(".")) lowerCaseHost == allowedHost.drop(1) || lowerCaseHost.endsWith(allowedHost)
+      else lowerCaseHost == allowedHost
+    }
+  }
+
+  /**
+   * Returns why an entry that already meets the redirect URL rules points to a host this instance does not
+   * allow, or None when there is no host list, the host is listed, or the entry is an app scheme.
+   */
+  def hostProblemWith(entry: String): Option[String] = allowedHosts match {
+    case Nil => None
+    case allowed =>
+      Try(new URI(entry)).toOption
+        .filter(uri => Option(uri.getScheme).map(_.toLowerCase).exists(scheme => scheme == "https" || scheme == "http"))
+        .flatMap(uri => Option(uri.getHost))
+        .filterNot(hostIsAllowed(_, allowed))
+        .map(host => s"the host '$host' is not one of the hosts this instance allows: ${allowed.mkString(", ")}")
+  }
+
+  /** One sentence for the Glossary and the boot log saying whether this instance limits redirect URL hosts. */
+  def allowedHostsDescription: String = allowedHosts match {
+    case Nil => "On this instance a redirect URL may point to any host that meets the redirect URL rules."
+    case allowed => s"On this instance a redirect URL must point to one of these hosts: ${allowed.mkString(", ")}."
+  }
 
   /** Splits a stored redirect URL value into its entries, the same way OBP-OIDC does. */
   def entries(redirectUrls: String): List[String] =
@@ -99,12 +151,26 @@ object RedirectUrlValidation {
 
   def isValid(redirectUrls: String): Boolean = firstProblem(redirectUrls).isEmpty
 
-  /** The entries that are allowed, for readers that must skip invalid stored data. */
+  /**
+   * The full error message for the first entry of a Consumer redirect URL value that is not allowed, or None
+   * when every entry is allowed. An entry that breaks the rules gives InvalidRedirectUrl. With
+   * `applyHostList`, an entry whose host is not on this instance's list gives RedirectUrlHostNotAllowed.
+   */
+  def consumerRedirectUrlError(redirectUrls: String, applyHostList: Boolean): Option[String] =
+    entries(redirectUrls).iterator.map { entry =>
+      problemWith(entry).map(reason => s"$InvalidRedirectUrl'$entry': $reason")
+        .orElse(if (applyHostList) hostProblemWith(entry).map(reason => s"$RedirectUrlHostNotAllowed'$entry': $reason") else None)
+    }.collectFirst { case Some(message) => message }
+
+  /** The entries that meet the rules, for readers that must skip invalid stored data. */
   def validEntries(redirectUrls: String): List[String] = entries(redirectUrls).filter(problemWith(_).isEmpty)
 
-  /** Fails with 400 InvalidRedirectUrl, naming the offending entry, when any entry is not allowed. */
-  def checkRedirectUrls(redirectUrls: String, callContext: Option[CallContext]): Future[Box[Unit]] = {
-    val problem = firstProblem(redirectUrls)
-    Helper.booleanToFuture(s"$InvalidRedirectUrl${problem.getOrElse("")}", 400, callContext) { problem.isEmpty }
+  /**
+   * Fails with 400, naming the offending entry, when any entry of a Consumer redirect URL value is not allowed.
+   * `applyHostList` is false only for Berlin Group dynamic registration, whose TPPs use their own domains.
+   */
+  def checkRedirectUrls(redirectUrls: String, callContext: Option[CallContext], applyHostList: Boolean = true): Future[Box[Unit]] = {
+    val error = consumerRedirectUrlError(redirectUrls, applyHostList)
+    Helper.booleanToFuture(error.getOrElse(""), 400, callContext) { error.isEmpty }
   }
 }
